@@ -83,7 +83,7 @@
       body, .view-fade, .step-fade { transition: none; }
     }
   </style>
-      <script src="../pwa.js" data-block-installed="admin"></script>
+    <script src="../pwa.js" data-block-installed="admin"></script>
   </head>
 
   <body class="font-body bg-court-900 text-white min-h-screen">
@@ -1468,7 +1468,8 @@
                     class="font-display text-xl font-bold tracking-tight">Championship</h2>
                   <p class="text-sm text-white/50">Once every game in every
                     category is completed, choose how many brackets its
-                    championship has, then start it. The top 4 teams play it.</p>
+                    championship has, then start it. The top 4 teams play
+                    it.</p>
                 </div>
               </div>
 
@@ -2642,7 +2643,24 @@
       const items = [];
       if (snap.exists()) snap.forEach((child) => { items.push({ id: child.key, ...child.val() }); });
       syncCompleted(items);
+      backfillAssignments(items);
       return items;
+    }
+
+    // The referee page finds tournaments through refereeAssignments/<uid>/<tournamentId>. Tournaments assigned before
+    // that index existed (or whose index write was missed) are invisible to the referee, so repair any gaps quietly.
+    function backfillAssignments(items) {
+      try {
+        const u = auth.currentUser;
+        if (!u || u.uid !== ADMIN_UID) return;
+        const updates = {};
+        items.forEach((t) => {
+          Object.keys((t.referees && typeof t.referees === "object") ? t.referees : {}).forEach((uid) => {
+            updates["refereeAssignments/" + uid + "/" + t.id] = true;
+          });
+        });
+        if (Object.keys(updates).length) update(ref(db), updates).catch(() => {});
+      } catch (_) {}
     }
 
     // ---------- Game generation ----------

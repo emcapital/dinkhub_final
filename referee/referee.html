@@ -10,12 +10,14 @@
     <!-- PWA: only this page links the manifest, so only the referee view can be installed. -->
     <link rel="manifest" href="../manifest.webmanifest" />
     <meta name="theme-color" content="#0b2a24" />
-    <link rel="icon" type="image/png" sizes="32x32" href="../icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="32x32"
+      href="../icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="DinkHub" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent" />
     <script src="../pwa.js"></script>
 
     <script src="https://cdn.tailwindcss.com"></script>
@@ -110,6 +112,33 @@
               r="5" /><circle cx="62" cy="72" r="5" /></g></svg><p
           class="mt-4 text-sm text-white/60">Warming up the
           court...</p></div>
+    </div>
+
+    <!-- Full-screen scoreboard: opens when a referee starts a game or match -->
+    <div id="gfs"
+      class="hidden fixed inset-0 z-50 flex flex-col bg-court-900 court-bg"
+      role="dialog" aria-modal="true" aria-label="Live scoreboard">
+      <div
+        class="flex items-center justify-between gap-3 border-b border-white/10 bg-court-800/90 px-4 py-3">
+        <button id="gfsBack" type="button"
+          class="inline-flex items-center gap-2 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold text-white/85 transition hover:border-optic/50 hover:text-optic focus:outline-none focus:ring-2 focus:ring-optic/30"><i
+            class="fa-solid fa-arrow-left text-xs"></i>Back</button>
+        <p id="gfsTitle"
+          class="min-w-0 flex-1 truncate text-center text-xs font-semibold uppercase tracking-widest text-white/60"></p>
+        <span
+          class="inline-flex items-center gap-1.5 rounded-full bg-optic/15 px-2.5 py-1 text-[11px] font-semibold text-optic"><span
+            class="live-dot h-1.5 w-1.5 rounded-full bg-optic"></span>Live</span>
+      </div>
+      <div id="gfsGrid"
+        class="grid min-h-0 flex-1 grid-rows-2 gap-3 p-3 md:grid-cols-2 md:grid-rows-1 md:p-5"></div>
+      <div
+        class="flex items-center gap-3 border-t border-white/10 bg-court-800/90 px-4 py-3">
+        <p id="gfsSave" class="min-w-0 flex-1 text-xs text-white/50">Saved</p>
+        <button id="gfsFinish" type="button"
+          class="inline-flex items-center justify-center gap-2 rounded-xl bg-optic px-6 py-3 font-display text-sm font-bold text-court-900 transition hover:bg-optic-dark focus:outline-none focus:ring-2 focus:ring-optic/50"><i
+            class="fa-solid fa-flag-checkered text-xs"></i><span
+            id="gfsFinishLabel">Finish game</span></button>
+      </div>
     </div>
 
     <!-- Finish game confirmation -->
@@ -245,9 +274,12 @@
             </div>
             <button id="installBtn" type="button"
               class="mb-2 hidden w-full items-center justify-center gap-2 rounded-xl bg-optic px-4 py-2.5 text-sm font-bold text-court-900 transition duration-300 hover:bg-optic-dark focus:outline-none focus:ring-2 focus:ring-optic/50">
-              <i class="fa-solid fa-download text-sm"></i><span>Install app</span>
+              <i class="fa-solid fa-download text-sm"></i><span>Install
+                app</span>
             </button>
-            <p id="installHint" class="mb-3 hidden text-center text-xs text-white/55">On iPhone / iPad: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
+            <p id="installHint"
+              class="mb-3 hidden text-center text-xs text-white/55">On iPhone /
+              iPad: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
             <button id="logoutBtn" type="button"
               class="flex w-full items-center justify-center gap-2 rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-white transition duration-300 hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-200 focus:outline-none focus:ring-2 focus:ring-red-400/30 disabled:cursor-not-allowed disabled:opacity-60">
               <svg id="logoutSpinner"
@@ -861,6 +893,7 @@
 
     // Don't rebuild the list while the referee is typing a score.
     function render() {
+      if (fs) syncFs();
       const a = document.activeElement;
       if (a && a.dataset && a.dataset.scoreInput) { renderPending = true; return; }
       // Let an entrance animation finish before live data redraws the list.
@@ -1087,7 +1120,7 @@
 
       if (status === "scheduled") {
         body.append(teamRow(g.team1, 0, { mode: "none" }), teamRow(g.team2, 0, { mode: "none" }));
-        actions.append(btn("Start game", "fa-table-tennis-paddle-ball", PRIMARY, (b) => run(b, () => writeScore(g, "live", 0, 0), "Game started.")));
+        actions.append(btn("Start game", "fa-table-tennis-paddle-ball", PRIMARY, (b) => run(b, async () => { await writeScore(g, "live", 0, 0); openFs(gameCtx(g), 0, 0); }, "Game started.")));
       } else if (status === "live" && !mine) {
         // Someone else started this game: show the live score, read-only.
         const a = sc.team1Score || 0, b2 = sc.team2Score || 0;
@@ -1119,7 +1152,8 @@
         body.append(row1, row2, note);
         save = btn("Save score", "fa-floppy-disk", OUTLINE, (b) => { const v = read(); run(b, () => writeScore(g, "live", v.t1, v.t2).then(() => drafts.delete(g.id)), "Score saved."); });
         finish = btn("Finish game", "fa-flag-checkered", PRIMARY, () => { const v = read(); openFinish(g, v.t1, v.t2); });
-        actions.append(save, finish);
+        const fsBtn = btn("Full screen", "fa-expand", PRIMARY, () => { drafts.delete(g.id); openFs(gameCtx(g), r1, r2); });
+        actions.append(fsBtn, save, finish);
         sync();
       } else {
         const a = sc.team1Score || 0, b2 = sc.team2Score || 0;
@@ -1127,7 +1161,7 @@
           teamRow(g.team1, a, { mode: "view", winner: a > b2, key: g.id + "|1" }),
           teamRow(g.team2, b2, { mode: "view", winner: b2 > a, key: g.id + "|2" })
         );
-        if (mine) actions.append(btn("Reopen game", "fa-rotate-left", OUTLINE, (b) => run(b, () => writeScore(g, "live", a, b2), "Game reopened.")));
+        if (mine) actions.append(btn("Reopen game", "fa-rotate-left", OUTLINE, (b) => run(b, async () => { await writeScore(g, "live", a, b2); openFs(gameCtx(g), a, b2); }, "Game reopened.")));
       }
       if (actions.children.length) li.appendChild(actions);
 
@@ -1425,7 +1459,7 @@
         body.append(placeholderRow(mt.ph[0]), placeholderRow(mt.ph[1]));
       } else if (!m) {
         body.append(teamRow(mt.t1, 0, { mode: "none" }), teamRow(mt.t2, 0, { mode: "none" }));
-        actions.append(btn("Start match", "fa-table-tennis-paddle-ball", PRIMARY, (b) => run(b, () => writePlayoff(c, mt, po, "live", 0, 0), "Match started.")));
+        actions.append(btn("Start match", "fa-table-tennis-paddle-ball", PRIMARY, (b) => run(b, async () => { await writePlayoff(c, mt, po, "live", 0, 0); openFs(matchCtx(c, mt, po, key), 0, 0); }, "Match started.")));
       } else if (inPlay && !mine) {
         body.append(teamRow(mt.t1, mt.s1, { mode: "view", key: key + "|1" }), teamRow(mt.t2, mt.s2, { mode: "view", key: key + "|2" }));
         const lock = document.createElement("p");
@@ -1457,7 +1491,8 @@
           const v = read();
           openFinish({ team1: mt.t1, team2: mt.t2, label: (CATEGORY_LABELS[c.key] || c.key) + " \u00b7 " + mt.label }, v.t1, v.t2, { c, mt, po, key });
         });
-        actions.append(save, finish);
+        const fsBtn = btn("Full screen", "fa-expand", PRIMARY, () => { drafts.delete(key); openFs(matchCtx(c, mt, po, key), mt.s1, mt.s2); });
+        actions.append(fsBtn, save, finish);
         sync();
       } else {
         body.append(
@@ -1469,7 +1504,7 @@
           actions.append(btn("Reopen match", "fa-rotate-left", OUTLINE, (b) => {
             if (isSemi && po && (po.third || po.final) &&
                 !window.confirm("Reopening this semi-final also clears the third-place and championship scores. Continue?")) return;
-            run(b, () => writePlayoff(c, mt, po, "live", mt.s1, mt.s2), "Match reopened.");
+            run(b, async () => { await writePlayoff(c, mt, po, "live", mt.s1, mt.s2); openFs(matchCtx(c, mt, po, key), mt.s1, mt.s2); }, "Match reopened.");
           }));
         }
       }
@@ -1621,6 +1656,149 @@
       cats.forEach((c) => list.appendChild(categoryCard(c, t)));
     }
 
+    // ---------- Full-screen scoreboard ----------
+    // Opens when a referee starts (or reopens) a game or match. Every +/- tap is saved straight away (a moment
+    // after the last tap), so the score is always current. Finish uses the same confirmation as the list view.
+    const gfs = $("gfs");
+    let fs = null; // { ctx, a, b, timer, pending, saving }
+    const fsEls = {};
+    [1, 2].forEach((side) => {
+      const panel = document.createElement("div");
+      panel.className = "flex min-h-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-3xl border border-white/10 bg-court-800/70 px-3 py-4 text-center md:gap-3";
+      const name = document.createElement("p");
+      name.className = "max-w-full break-words font-display text-xl font-extrabold leading-tight tracking-tight sm:text-3xl";
+      const players = document.createElement("p");
+      players.className = "max-w-full break-words text-sm leading-tight text-white/55";
+      const score = document.createElement("p");
+      score.className = "min-w-[2ch] font-display text-7xl font-extrabold leading-none tabular-nums text-optic sm:text-9xl";
+      score.textContent = "0";
+      const row = document.createElement("div");
+      row.className = "mt-3 flex items-center justify-center gap-3 sm:gap-6";
+      const mk = (delta, icon, label, cls) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "grid h-16 w-16 shrink-0 place-items-center rounded-2xl text-2xl transition active:scale-95 focus:outline-none focus:ring-2 focus:ring-optic/40 sm:h-20 sm:w-20 " + cls;
+        b.setAttribute("aria-label", label);
+        b.innerHTML = '<i class="fa-solid ' + icon + '"></i>';
+        b.addEventListener("click", () => bumpFs(side, delta));
+        return b;
+      };
+      row.append(
+        mk(-1, "fa-minus", "Subtract a point", "border border-white/15 text-white/80 hover:border-optic/50 hover:text-optic"),
+        score,
+        mk(1, "fa-plus", "Add a point", "bg-optic text-court-900 hover:bg-optic-dark")
+      );
+      panel.append(name, players, row);
+      $("gfsGrid").appendChild(panel);
+      fsEls[side] = { name, players, score };
+    });
+
+    function paintFs() {
+      if (!fs) return;
+      [[1, fs.a], [2, fs.b]].forEach(([side, v]) => {
+        const el = fsEls[side].score;
+        if (el.textContent !== String(v)) {
+          el.textContent = String(v);
+          if (!REDUCED) { el.classList.remove("score-pop"); void el.offsetWidth; el.classList.add("score-pop"); }
+        }
+      });
+    }
+    const fsStatus = (t) => { $("gfsSave").textContent = t; };
+
+    function openFs(ctx, a, b) {
+      clearTimeout(fs && fs.timer);
+      fs = { ctx, a: clampScore(a), b: clampScore(b), timer: null, pending: false, saving: false };
+      $("gfsTitle").textContent = ctx.label;
+      $("gfsFinishLabel").textContent = "Finish " + ctx.noun;
+      [[1, ctx.team1], [2, ctx.team2]].forEach(([side, tm]) => {
+        fsEls[side].name.textContent = (tm && tm.name) || "Team " + side;
+        fsEls[side].players.textContent = toList(tm && tm.players).join(" & ");
+        fsEls[side].score.textContent = "";
+      });
+      paintFs();
+      fsStatus("Saved");
+      gfs.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+    }
+    function closeFs(flush = true) {
+      if (!fs) return;
+      if (flush) flushFs();
+      clearTimeout(fs.timer);
+      fs = null;
+      gfs.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+    function bumpFs(side, delta) {
+      if (!fs) return;
+      if (side === 1) fs.a = clampScore(fs.a + delta); else fs.b = clampScore(fs.b + delta);
+      paintFs();
+      fs.pending = true;
+      fsStatus("Saving...");
+      clearTimeout(fs.timer);
+      fs.timer = setTimeout(flushFs, 300);
+    }
+    function flushFs() {
+      const f = fs;
+      if (!f) return Promise.resolve();
+      clearTimeout(f.timer);
+      if (!f.pending) return Promise.resolve();
+      f.pending = false;
+      f.saving = true;
+      return f.ctx.write(f.a, f.b).then(() => {
+        f.saving = false;
+        if (fs === f && !f.pending) fsStatus("Saved");
+      }).catch((err) => {
+        f.saving = false;
+        f.pending = true; // try again on the next tap or when finishing
+        if (fs === f) fsStatus("Not saved. Check your connection.");
+        if (err && err.message === "not-owner") showToast("Only " + (err.ownerName || "the referee who started this") + " can score this.");
+        else showToast(isPermissionError(err) ? "Permission denied. Check the database rules." : "Couldn't save the score.");
+      });
+    }
+    // Live data arrived: follow the saved score, or close if it was finished or taken over.
+    function syncFs() {
+      if (!fs) return;
+      const rec = fs.ctx.rec();
+      if (!rec) return; // our own start is still on its way to the database
+      if (rec.status === "completed") { closeFs(false); return; }
+      const o = ownerOf(rec);
+      if (o && o !== me.uid) { closeFs(false); showToast("Only " + ownerName(rec) + " can score this."); return; }
+      if (!fs.pending && !fs.saving) {
+        fs.a = Number(rec.team1Score) || 0;
+        fs.b = Number(rec.team2Score) || 0;
+        paintFs();
+      }
+    }
+    $("gfsBack").addEventListener("click", () => closeFs());
+    $("gfsFinish").addEventListener("click", () => {
+      if (!fs) return;
+      const f = fs;
+      flushFs();
+      f.ctx.finish(f.a, f.b);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && fs && fmModal.classList.contains("hidden")) closeFs();
+    });
+    const gameCtx = (g) => ({
+      label: (CATEGORY_LABELS[g.category] || g.category || "Game") + " \u00b7 Game " + (g.number || "") + " \u00b7 Round " + (g.round || ""),
+      noun: "game",
+      team1: g.team1, team2: g.team2,
+      rec: () => scores[g.id] || null,
+      write: (a, b) => writeScore(g, "live", a, b),
+      finish: (a, b) => openFinish(g, a, b),
+    });
+    const matchCtx = (c, mt, po, key) => {
+      const rec = () => (playoffs[c.key] || {})[mt.id] || null;
+      const label = (CATEGORY_LABELS[c.key] || c.key) + " \u00b7 " + mt.label;
+      return {
+        label, noun: "match",
+        team1: mt.t1, team2: mt.t2,
+        rec,
+        write: (a, b) => writePlayoff(c, { ...mt, m: rec() }, po, "live", a, b),
+        finish: (a, b) => openFinish({ team1: mt.t1, team2: mt.t2, label }, a, b, { c, mt: { ...mt, m: rec() }, po, key }),
+      };
+    };
+
     // ---------- Finish confirmation ----------
     const fmModal = $("fmModal");
     let finishing = null; // { g, t1, t2, pl }  (pl is set for a championship match)
@@ -1671,6 +1849,7 @@
           drafts.delete(g.id);
         }
         closeFinish();
+        if (fs) closeFs(false);
         showToast(pl ? "Match finished." : "Game finished.");
       } catch (err) {
         $("fmGo").disabled = false;
@@ -1680,7 +1859,7 @@
       }
     });
   </script>
-      <script>
+    <script>
     // PWA: register the service worker and wire up the "Install app" button (referee page only).
     (function () {
       if ("serviceWorker" in navigator) {
