@@ -1,6 +1,6 @@
 # 🏓 DinkHub
 
-DinkHub is a web-based **pickleball tournament management system** with three role-based portals: an **Admin** dashboard, a **Referee** scoring app, and an **Operator** broadcast view. It runs entirely in the browser, uses **Firebase** for authentication and real-time data, and the referee view can be installed as a **Progressive Web App (PWA)**.
+DinkHub is a web-based **pickleball tournament management system** with three role-based portals: An **Admin** dashboard, a **Referee** scoring app, and an **Operator** broadcast view. It runs entirely in the browser, uses **Firebase** for authentication and real-time data, and the referee view can be installed as a **Progressive Web App (PWA)**.
 
 ---
 
