@@ -32,10 +32,11 @@
       "#dhBrowserOnly .ic{display:grid;place-items:center;width:52px;height:52px;border-radius:999px;background:rgba(215,255,63,.12);color:#d7ff3f;font-size:24px}" +
       "#dhBrowserOnly h2{margin:16px 0 0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;font-weight:800;letter-spacing:-.01em}" +
       "#dhBrowserOnly p{margin:10px 0 0;font-size:14px;line-height:1.55;color:rgba(255,255,255,.72)}" +
-      "#dhBrowserOnly .row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}" +
-      "#dhBrowserOnly button{flex:1 1 140px;cursor:pointer;border-radius:12px;padding:12px 14px;font:600 14px 'DM Sans',system-ui,sans-serif;transition:transform .2s,background .2s}" +
+      "#dhBrowserOnly .row{display:flex;flex-direction:column;gap:10px;margin-top:20px}" +
+      "#dhBrowserOnly button{width:100%;white-space:nowrap;cursor:pointer;border-radius:12px;padding:12px 14px;font:600 14px 'DM Sans',system-ui,sans-serif;transition:transform .2s,background .2s}" +
       "#dhBrowserOnly button:active{transform:scale(.98)}" +
-      "#dhBrowserOnly .pri{border:0;background:#d7ff3f;color:#0b2a24}" +
+      "#dhBrowserOnly .hint{margin:10px 0 0;font-size:12px;color:#d7ff3f;display:none}" +
+      "#dhBrowserOnly .pri{flex-basis:100%;border:0;background:#d7ff3f;color:#0b2a24}" +
       "#dhBrowserOnly .pri:hover{background:#b9e01f}" +
       "#dhBrowserOnly .sec{border:1px solid rgba(255,255,255,.18);background:transparent;color:#fff}" +
       "#dhBrowserOnly .sec:hover{background:rgba(255,255,255,.06)}" +
@@ -58,24 +59,35 @@
       '<div class="row">' +
       '<button type="button" class="pri" id="dhBoOpen">Open in web browser</button>' +
       '<button type="button" class="sec" id="dhBoBack">Back to login</button>' +
-      '</div></div>';
+      '</div><p class="hint" id="dhBoHint">Couldn\u2019t open automatically. Please open your web browser and sign in there.</p></div>';
     (document.body || document.documentElement).appendChild(wrap);
 
     // Block interaction/scroll with whatever is behind the pop-up; it can't be dismissed.
     document.documentElement.style.overflow = "hidden";
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") e.preventDefault(); }, true);
 
-    // Open the login page in the phone/computer's normal browser instead of the installed app.
+    // Open the login page in the normal browser instead of the installed app.
+    var hint = wrap.querySelector("#dhBoHint");
     wrap.querySelector("#dhBoOpen").addEventListener("click", function () {
+      hint.style.display = "none";
+      var left = false;
+      var onHide = function () { if (document.hidden) left = true; };
+      document.addEventListener("visibilitychange", onHide);
+      window.addEventListener("pagehide", function () { left = true; }, { once: true });
       var u = new URL(LOGIN_URL);
       if (/android/i.test(navigator.userAgent)) {
-        // Android: force Chrome so the link doesn't reopen inside the installed app.
+        // Android: hand the link to Chrome so it doesn't reopen inside the installed app.
         location.href = "intent://" + u.host + u.pathname + u.search +
           "#Intent;scheme=" + u.protocol.replace(":", "") + ";package=com.android.chrome;" +
           "S.browser_fallback_url=" + encodeURIComponent(LOGIN_URL) + ";end";
       } else {
         window.open(LOGIN_URL, "_blank", "noopener");
       }
+      // If we are still on screen a moment later, the device kept the link inside the app.
+      setTimeout(function () {
+        document.removeEventListener("visibilitychange", onHide);
+        if (!left) hint.style.display = "block";
+      }, 1500);
     });
     wrap.querySelector("#dhBoBack").addEventListener("click", function () {
       if (/\/index\.html$|\/$/.test(location.pathname) && location.href.indexOf(ROOT) === 0 && !/\/(admin|operator|referee)\//.test(location.pathname)) {
