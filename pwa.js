@@ -32,7 +32,6 @@
       "#dhBrowserOnly .ic{display:grid;place-items:center;width:52px;height:52px;border-radius:999px;background:rgba(215,255,63,.12);color:#d7ff3f;font-size:24px}" +
       "#dhBrowserOnly h2{margin:16px 0 0;font-family:'Bricolage Grotesque',system-ui,sans-serif;font-size:24px;font-weight:800;letter-spacing:-.01em}" +
       "#dhBrowserOnly p{margin:10px 0 0;font-size:14px;line-height:1.55;color:rgba(255,255,255,.72)}" +
-      "#dhBrowserOnly .url{margin-top:14px;word-break:break-all;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:#0b2a24;padding:10px 12px;font-size:12px;color:rgba(255,255,255,.65)}" +
       "#dhBrowserOnly .row{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}" +
       "#dhBrowserOnly button{flex:1 1 140px;cursor:pointer;border-radius:12px;padding:12px 14px;font:600 14px 'DM Sans',system-ui,sans-serif;transition:transform .2s,background .2s}" +
       "#dhBrowserOnly button:active{transform:scale(.98)}" +
@@ -56,34 +55,34 @@
       '<h2 id="dhBoTitle">Please log in via your web browser</h2>' +
       '<p id="dhBoDesc">' + label + ' accounts can\u2019t be used in the installed DinkHub app. ' +
       'Open DinkHub in your web browser (Chrome, Safari, Edge\u2026) and sign in there.</p>' +
-      '<div class="url" id="dhBoUrl"></div>' +
       '<div class="row">' +
-      '<button type="button" class="pri" id="dhBoCopy">Copy browser link</button>' +
+      '<button type="button" class="pri" id="dhBoOpen">Open in web browser</button>' +
       '<button type="button" class="sec" id="dhBoBack">Back to login</button>' +
       '</div></div>';
     (document.body || document.documentElement).appendChild(wrap);
-    wrap.querySelector("#dhBoUrl").textContent = LOGIN_URL;
 
     // Block interaction/scroll with whatever is behind the pop-up; it can't be dismissed.
     document.documentElement.style.overflow = "hidden";
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") e.preventDefault(); }, true);
 
-    var copyBtn = wrap.querySelector("#dhBoCopy");
-    copyBtn.addEventListener("click", function () {
-      var done = function (ok) {
-        copyBtn.textContent = ok ? "Link copied \u2713" : "Select the link above";
-        setTimeout(function () { copyBtn.textContent = "Copy browser link"; }, 2200);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(LOGIN_URL).then(function () { done(true); }, function () { done(false); });
-      } else done(false);
+    // Open the login page in the phone/computer's normal browser instead of the installed app.
+    wrap.querySelector("#dhBoOpen").addEventListener("click", function () {
+      var u = new URL(LOGIN_URL);
+      if (/android/i.test(navigator.userAgent)) {
+        // Android: force Chrome so the link doesn't reopen inside the installed app.
+        location.href = "intent://" + u.host + u.pathname + u.search +
+          "#Intent;scheme=" + u.protocol.replace(":", "") + ";package=com.android.chrome;" +
+          "S.browser_fallback_url=" + encodeURIComponent(LOGIN_URL) + ";end";
+      } else {
+        window.open(LOGIN_URL, "_blank", "noopener");
+      }
     });
     wrap.querySelector("#dhBoBack").addEventListener("click", function () {
       if (/\/index\.html$|\/$/.test(location.pathname) && location.href.indexOf(ROOT) === 0 && !/\/(admin|operator|referee)\//.test(location.pathname)) {
         wrap.remove(); shown = false; document.documentElement.style.overflow = "";
       } else location.replace(LOGIN_URL);
     });
-    var first = wrap.querySelector("#dhBoCopy");
+    var first = wrap.querySelector("#dhBoOpen");
     if (first && first.focus) first.focus();
   }
 
