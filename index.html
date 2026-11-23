@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DinkHub | Login</title>
     <meta name="theme-color" content="#0b2a24" />
-    <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="32x32"
+      href="icons/favicon-32.png" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <script src="pwa.js"></script>
@@ -284,6 +285,21 @@
             </button>
           </form>
 
+          <div class="rise mt-6" style="--d:650ms">
+            <div class="flex items-center gap-3 text-xs text-white/35"
+              aria-hidden="true">
+              <span class="h-px flex-1 bg-white/10"></span>or<span
+                class="h-px flex-1 bg-white/10"></span>
+            </div>
+            <a href="./openplay/dashboard.html"
+              class="group mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-optic/40 px-4 py-3.5 font-display text-base font-bold text-optic transition duration-300 hover:-translate-y-0.5 hover:bg-optic hover:text-court-900 hover:shadow-lg hover:shadow-optic/25 active:translate-y-0 active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-optic/50">
+              <i class="fa-solid fa-table-tennis-paddle-ball text-sm"></i>
+              <span>Open play</span>
+              <i
+                class="fa-solid fa-arrow-right text-sm transition-transform duration-300 group-hover:translate-x-1.5"></i>
+            </a>
+          </div>
+
           <p class="rise mt-8 text-center text-xs text-white/40"
             style="--d:700ms">
             Restricted area. Unauthorized access attempts are
@@ -561,13 +577,15 @@
       @keyframes pwaPop{from{opacity:0;transform:translateY(12px) scale(.97)}to{opacity:1;transform:none}}
       @media (prefers-reduced-motion:reduce){#pwaInstall .pwa-card{animation:none}}
     </style>
-    <div id="pwaInstall" role="dialog" aria-modal="true" aria-labelledby="pwaTitle" aria-describedby="pwaDesc">
+    <div id="pwaInstall" role="dialog" aria-modal="true"
+      aria-labelledby="pwaTitle" aria-describedby="pwaDesc">
       <div class="pwa-card">
         <div class="pwa-head">
-          <img src="icons/icon-192.png" alt="" />
+          <img src="icons/icon-192.png" alt />
           <h2 id="pwaTitle">Install the DinkHub app</h2>
         </div>
-        <p id="pwaDesc">Add DinkHub to your device for faster access, a full-screen experience and quick launch from your home screen.</p>
+        <p id="pwaDesc">Add DinkHub to your device for faster access, a
+          full-screen experience and quick launch from your home screen.</p>
         <div class="pwa-steps" id="pwaSteps"></div>
         <div class="pwa-row">
           <button type="button" class="pwa-no" id="pwaLater">Not now</button>
