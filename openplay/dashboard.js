@@ -15,7 +15,7 @@
     autoFill: false,    // when true, empty courts fill automatically from the queue
     courtCount: 3,
     setupDone: false,   // false until the courts question has been answered for this session
-    shareId: null,      // unique id of this open play's public link (activity.html?id=...), null = not shared
+    shareId: null,      // unique id of this open play's public link (activity?id=...), null = not shared
     shareCreated: null, // when the link was made; it stops working 7 days later
   };
   const SHARE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -733,7 +733,7 @@
     };
   }
 
-  // ---- Share: a QR code that opens activity.html?id=<unique id> with a live, read-only view ----
+  // ---- Share: a QR code that opens activity?id=<unique id> with a live, read-only view ----
   // The open play is copied to Realtime Database under a unique id and removed again after 7 days (see share.js and the database rules).
   const newShareId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
   const logRow = (g) => ({ t: g.t, a: g.a, b: g.b, winner: g.winner || null, court: g.court });
@@ -812,7 +812,7 @@
     }
     save();
     if ($("#modal").classList.contains("hidden")) return; // closed while the link was being made
-    const url = new URL("activity.html?id=" + id, location.href).href;
+    const url = new URL("activity?id=" + id, location.href).href;
     const until = new Date(state.shareCreated + SHARE_TTL).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
     openModal(`
       <div class="text-xs font-bold uppercase tracking-[.22em] text-optic">Live link</div>
