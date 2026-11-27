@@ -1063,6 +1063,7 @@
     try { localStorage.setItem(TOUR_KEY, "1"); } catch (e) {}
     const t = tour; tour = null; tourI = -1;
     cancelAnimationFrame(t.raf);
+    if (window.DinkNav) window.DinkNav.sync(false);
     document.removeEventListener("keydown", tourKey, true);
     t.root.classList.remove("on");
     setTimeout(() => t.root.remove(), 360);
@@ -1094,6 +1095,7 @@
     inner.classList.remove("swap"); void inner.offsetWidth; inner.classList.add("swap");
     tour.bar.style.transform = `scaleX(${(tourI + 1) / TOUR.length})`;
     const el = s.sel && document.querySelector(s.sel);
+    if (window.DinkNav) window.DinkNav.sync(!!(el && el.closest("#navPanel"))); // phones: open the sidebar for its buttons
     if (el) el.scrollIntoView({ block: "center", behavior: reduceMotion() ? "auto" : "smooth" });
     inner.querySelector('[data-t="next"]').focus({ preventScroll: true });
   }

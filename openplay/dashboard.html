@@ -45,6 +45,12 @@ tailwind.config = {
   #btnTheme i { position: absolute; transition: transform .5s cubic-bezier(.22, 1, .36, 1), opacity .3s; }
   html[data-theme="dark"] #btnTheme .t-sun { transform: rotate(-90deg) scale(.3); opacity: 0; }
   html[data-theme="light"] #btnTheme .t-moon { transform: rotate(90deg) scale(.3); opacity: 0; }
+  /* Phones: the header actions live in a slide-in sidebar (from sm up they are normal header buttons) */
+  @media (max-width: 639px) {
+    #navPanel { transform: translateX(-100%); visibility: hidden; transition: transform .3s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .3s; }
+    #navPanel.open { transform: none; visibility: visible; transition: transform .3s cubic-bezier(.22, 1, .36, 1), visibility 0s; box-shadow: 0 0 60px rgba(0, 0, 0, .5); }
+  }
+  @media (prefers-reduced-motion: reduce) { #navPanel { transition: none !important; } }
   .num { font-variant-numeric: tabular-nums; }
   @keyframes pop { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(215,255,63,.55); } 100% { box-shadow: 0 0 0 9px rgba(215,255,63,0); } }
@@ -118,17 +124,19 @@ tailwind.config = {
     </head>
     <body id="top" class="font-body text-white min-h-screen antialiased">
 
-        <header class="border-b border-white/10">
+        <!-- sticky: stays at the top while the page scrolls (solid background, no blur, so the phone sidebar inside it keeps working) -->
+        <header class="sticky top-0 z-40 border-b border-white/10 bg-court-900">
             <div
                 class="mx-auto flex max-w-[1400px] items-center justify-between gap-2 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:gap-3 sm:px-6">
 
-                <!-- Brand -->
+                <!-- Brand (on phones: menu button + brand) -->
                 <div class="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-                    <a href="../index.html"
-                        class="flex h-10 shrink-0 items-center gap-2 rounded-xl bg-white/5 px-3 text-sm font-semibold hover:bg-white/10"
-                        aria-label="Back to DinkHub"><i
-                            class="fa-solid fa-arrow-left"></i><span
-                            class="hidden sm:inline">Back</span></a>
+                    <button id="btnMenu" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="navPanel"
+                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 sm:hidden"><i
+                            class="fa-solid fa-bars"></i></button>
+                    <button id="btnLogout" type="button" title="Log out" aria-label="Log out"
+                        class="js-logout hidden h-10 shrink-0 items-center gap-2 rounded-xl bg-white/5 px-3 text-sm font-semibold hover:bg-white/10 disabled:opacity-60 sm:flex"><i
+                            class="fa-solid fa-right-from-bracket"></i><span>Logout</span></button>
                     <div
                         class="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-optic text-court-900 min-[420px]:flex"><i
                             class="fa-solid fa-table-tennis-paddle-ball"></i></div>
@@ -140,33 +148,56 @@ tailwind.config = {
                     </div>
                 </div>
 
-                <!-- Actions: icon-only on phones, "Complete Open Play" label from sm up -->
-                <div class="flex shrink-0 items-center gap-2">
+                <!-- Phones only: dark backdrop behind the sidebar -->
+                <div id="navBackdrop" class="fixed inset-0 z-30 hidden bg-black/60 sm:hidden" aria-hidden="true"></div>
+
+                <!-- Actions: a slide-in sidebar with names on phones, the usual header buttons from sm up -->
+                <nav id="navPanel" aria-label="Menu"
+                    class="fixed inset-y-0 left-0 z-40 flex w-[19rem] max-w-[85vw] flex-col gap-2 overflow-y-auto border-r border-white/10 bg-court-800 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:static sm:z-auto sm:w-auto sm:max-w-none sm:shrink-0 sm:flex-row sm:items-center sm:overflow-visible sm:border-0 sm:bg-transparent sm:p-0">
+                    <div class="mb-1 flex items-center justify-between sm:hidden">
+                        <div class="flex items-center gap-2.5">
+                            <span class="flex h-10 w-10 items-center justify-center rounded-full bg-optic text-court-900"><i
+                                    class="fa-solid fa-table-tennis-paddle-ball"></i></span>
+                            <span class="font-display text-xl font-extrabold">Dink<span class="text-optic">Hub</span></span>
+                        </div>
+                        <button id="navClose" type="button" aria-label="Close menu"
+                            class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10"><i
+                                class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <p class="px-1 pb-1 pt-2 text-xs font-semibold uppercase tracking-wider text-white/45 sm:hidden">Menu</p>
+
                     <button data-a="finish" title="Complete Open Play" aria-label="Complete Open Play"
-                        class="flex h-10 min-w-10 items-center justify-center rounded-xl border border-optic/50 px-2.5 text-sm font-bold text-optic hover:bg-optic hover:text-court-900 sm:px-4"><i
-                            class="fa-solid fa-flag-checkered"></i><span
-                            class="ml-2 hidden whitespace-nowrap sm:inline">Complete Open Play</span></button>
+                        class="flex h-12 w-full items-center gap-3 rounded-xl border border-optic/50 px-4 text-base font-bold text-optic hover:bg-optic hover:text-court-900 sm:h-10 sm:w-auto sm:min-w-10 sm:justify-center sm:gap-0 sm:px-4 sm:text-sm"><i
+                            class="fa-solid fa-flag-checkered w-5 text-center sm:w-auto"></i><span
+                            class="whitespace-nowrap sm:ml-2">Complete Open Play</span></button>
                     <span id="clock"
                         class="num hidden font-display text-lg font-semibold text-white/80 md:inline">--:--</span>
                     <button id="btnShare" data-a="share" title="Share with players" aria-label="Share this open play with a QR code"
-                        class="flex h-10 items-center gap-2 rounded-xl bg-white/5 px-3 text-sm font-semibold hover:bg-white/10"><i
-                            class="fa-solid fa-qrcode"></i><span
-                            class="hidden md:inline">Share</span></button>
+                        class="flex h-12 w-full items-center gap-3 rounded-xl bg-white/5 px-4 text-base font-semibold hover:bg-white/10 sm:h-10 sm:w-auto sm:gap-2 sm:px-3 sm:text-sm"><i
+                            class="fa-solid fa-qrcode w-5 text-center sm:w-auto"></i><span
+                            class="inline sm:hidden md:inline">Share</span></button>
                     <button id="btnTour"
-                        class="flex h-10 items-center gap-2 rounded-xl bg-white/5 px-3 text-sm font-semibold hover:bg-white/10"
+                        class="flex h-12 w-full items-center gap-3 rounded-xl bg-white/5 px-4 text-base font-semibold hover:bg-white/10 sm:h-10 sm:w-auto sm:gap-2 sm:px-3 sm:text-sm"
                         aria-label="Take a tour of this page"><i
-                            class="fa-solid fa-circle-question"></i><span
-                            class="hidden md:inline">Tour</span></button>
+                            class="fa-solid fa-circle-question w-5 text-center sm:w-auto"></i><span
+                            class="inline sm:hidden md:inline">Tour</span></button>
                     <button id="btnTheme" type="button" aria-pressed="false"
-                        class="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white/5 hover:bg-white/10"
-                        aria-label="Switch to light mode" title="Switch to light mode"><i
-                            class="fa-solid fa-moon t-moon"></i><i
-                            class="fa-solid fa-sun t-sun"></i></button>
+                        class="relative flex h-12 w-full items-center gap-3 overflow-hidden rounded-xl bg-white/5 px-4 text-base font-semibold hover:bg-white/10 sm:h-10 sm:w-10 sm:justify-center sm:px-0"
+                        aria-label="Switch to light mode" title="Switch to light mode"><span
+                            class="relative flex h-5 w-5 items-center justify-center"><i
+                                class="fa-solid fa-moon t-moon"></i><i
+                                class="fa-solid fa-sun t-sun"></i></span><span class="sm:hidden">Theme</span></button>
                     <button id="btnSettings"
-                        class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10"
+                        class="flex h-12 w-full items-center gap-3 rounded-xl bg-white/5 px-4 text-base font-semibold hover:bg-white/10 sm:h-10 sm:w-10 sm:justify-center sm:px-0"
                         aria-label="Settings"><i
-                            class="fa-solid fa-gear"></i></button>
-                </div>
+                            class="fa-solid fa-gear w-5 text-center sm:w-auto"></i><span class="sm:hidden">Settings</span></button>
+
+                    <div class="mt-auto border-t border-white/10 pt-3 sm:hidden">
+                        <button id="btnLogoutM" type="button" aria-label="Log out"
+                            class="js-logout flex h-12 w-full items-center gap-3 rounded-xl border border-red-400/40 px-4 text-base font-semibold text-red-300 hover:bg-red-500/10 disabled:opacity-60"><i
+                                class="fa-solid fa-right-from-bracket w-5 text-center"></i>Logout</button>
+                    </div>
+                </nav>
             </div>
         </header>
 
@@ -302,5 +333,47 @@ tailwind.config = {
         <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
         <script type="module" src="share.js"></script>
         <script src="dashboard.js"></script>
+        <script>
+            // Logout (header button on larger screens, sidebar button on phones): share.js signs the user out, then sends them to auth.html
+            document.querySelectorAll(".js-logout").forEach(function (b) {
+                b.addEventListener("click", function () {
+                    if (!window.DinkShare) return;
+                    b.disabled = true;
+                    window.DinkShare.signOut().catch(function () { b.disabled = false; });
+                });
+            });
+
+            // Phone sidebar: open with the menu button, close with X, the backdrop, Escape, a swipe left, or after choosing an item
+            (function () {
+                var panel = document.getElementById("navPanel"), bd = document.getElementById("navBackdrop"),
+                    btn = document.getElementById("btnMenu"), mq = window.matchMedia("(max-width: 639px)"), isOpen = false, tx = null;
+                function set(o, refocus) {
+                    o = !!o && mq.matches;
+                    if (o === isOpen) return;
+                    isOpen = o;
+                    panel.classList.toggle("open", o);
+                    bd.classList.toggle("hidden", !o);
+                    btn.setAttribute("aria-expanded", String(o));
+                    btn.setAttribute("aria-label", o ? "Close menu" : "Open menu");
+                    document.body.style.overflow = o ? "hidden" : "";
+                    if (o) document.getElementById("navClose").focus({ preventScroll: true });
+                    else if (refocus) btn.focus({ preventScroll: true });
+                }
+                btn.addEventListener("click", function () { set(!isOpen, true); });
+                document.getElementById("navClose").addEventListener("click", function () { set(false, true); });
+                bd.addEventListener("click", function () { set(false, true); });
+                document.addEventListener("keydown", function (e) { if (e.key === "Escape" && isOpen) set(false, true); });
+                // choosing an item closes the sidebar (the theme switch stays open so the change can be seen)
+                panel.addEventListener("click", function (e) {
+                    var b = e.target.closest("button");
+                    if (b && b.id !== "navClose" && b.id !== "btnTheme" && !b.classList.contains("js-logout")) set(false, false);
+                });
+                panel.addEventListener("touchstart", function (e) { tx = e.touches[0].clientX; }, { passive: true });
+                panel.addEventListener("touchend", function (e) { if (tx !== null && tx - e.changedTouches[0].clientX > 60) set(false, true); tx = null; }, { passive: true });
+                (mq.addEventListener ? mq.addEventListener.bind(mq, "change") : mq.addListener.bind(mq))(function () { if (!mq.matches) set(false, false); });
+                // the guided tour opens the sidebar while it points at one of its buttons
+                window.DinkNav = { sync: function (o) { set(o, false); } };
+            })();
+        </script>
     </body>
 </html>
