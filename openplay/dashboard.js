@@ -15,12 +15,17 @@
     autoFill: false,    // when true, empty courts fill automatically from the queue
     courtCount: 3,
     setupDone: false,   // false until the courts question has been answered for this session
+    shareId: null,      // unique id of this open play's public link (activity.html?id=...), null = not shared
+    shareCreated: null, // when the link was made; it stops working 7 days later
   };
+  const SHARE_TTL = 7 * 24 * 60 * 60 * 1000;
+  let shareT = 0;
   const load = () => {
     try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.players) state = Object.assign(state, s); } catch (e) {}
     syncCourts();
+    if (state.shareId && Date.now() > (state.shareCreated || 0) + SHARE_TTL) { state.shareId = null; state.shareCreated = null; }
   };
-  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} };
+  const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} scheduleShare(); };
   function syncCourts() {
     while (state.courts.length < state.courtCount) state.courts.push({ id: uid(), name: "Court " + (state.courts.length + 1), players: null, startedAt: null });
     // shrinking only removes empty courts from the end
@@ -315,6 +320,11 @@
       </div>
       <p id="cNote" class="mt-2 text-sm text-white/50">Only empty courts can be removed.</p>
       <hr class="my-5 border-white/10" />
+      ${(() => { const u = window.DinkShare && window.DinkShare.user(); return u ? `<div class="flex items-center gap-3">
+        <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-optic/15 text-optic"><i class="fa-solid fa-user"></i></span>
+        <div class="min-w-0 flex-1 leading-tight"><div class="truncate text-sm font-semibold">${esc(u.name || "Signed in")}</div>${u.club ? `<div class="truncate text-xs font-semibold text-optic">${esc(u.club)}</div>` : ""}<div class="truncate text-xs text-white/55">${esc(u.email || "")}</div></div>
+        <button id="btnSignOut" class="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-sm font-semibold hover:bg-white/10"><i class="fa-solid fa-right-from-bracket mr-2"></i>Sign out</button></div>
+      <hr class="my-5 border-white/10" />` : ""; })()}
       <button id="btnReset" class="w-full rounded-xl border border-red-400/40 px-3 py-2.5 text-sm font-semibold text-red-300 hover:bg-red-500/10">Reset session and clear all players</button>
       <button id="mClose" class="mt-2 w-full rounded-xl bg-optic px-3 py-2.5 font-bold text-court-900">Done</button>`);
     const setCount = (n) => {
@@ -324,8 +334,11 @@
     $("#cMinus").onclick = () => setCount(state.courtCount - 1);
     $("#cPlus").onclick = () => setCount(state.courtCount + 1);
     $("#mClose").onclick = closeModal;
+    const so = $("#btnSignOut");
+    if (so) so.onclick = () => { so.disabled = true; window.DinkShare.signOut().catch(() => { so.disabled = false; toast("Couldn't sign out, try again"); }); };
     $("#btnReset").onclick = () => {
       if (!confirm("Clear all players, courts and history?")) return;
+      stopShare(true);
       state.players = {}; state.queue = []; state.log = []; state.courts.forEach((c) => { c.players = null; c.startedAt = null; });
       state.setupDone = false; save(); render(); closeModal();
     };
@@ -713,10 +726,124 @@
     $("#mKeep").onclick = closeModal;
     $("#mFinish").onclick = () => {
       const snap = { ranking: buildRanking(all), log: state.log.slice(), players: all.length, duration: Date.now() - started };
+      finalizeShare(snap);
       state.players = {}; state.queue = []; state.log = [];
       state.courts.forEach((c) => { c.players = null; c.startedAt = null; });
       state.setupDone = false; save(); render(); resultsModal(snap);
     };
+  }
+
+  // ---- Share: a QR code that opens activity.html?id=<unique id> with a live, read-only view ----
+  // The open play is copied to Realtime Database under a unique id and removed again after 7 days (see share.js and the database rules).
+  const newShareId = () => Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+  const logRow = (g) => ({ t: g.t, a: g.a, b: g.b, winner: g.winner || null, court: g.court });
+  // only names and results are published: no internal ids
+  function shareSnapshot() {
+    const all = Object.values(state.players), playing = all.filter((p) => p.status === "playing").length;
+    return {
+      v: 1, createdAt: state.shareCreated, expiresAt: state.shareCreated + SHARE_TTL, updatedAt: Date.now(), finished: false,
+      mode: { winnersStay: state.winnersStay, fixedPartner: state.fixedPartner, autoFill: state.autoFill },
+      stats: { players: all.length, waiting: state.queue.length, onCourt: playing, free: state.courts.filter((c) => !c.players).length },
+      courts: state.courts.map((c) => ({ name: c.name, startedAt: c.startedAt || null, players: c.players ? c.players.map((i) => (P(i) ? P(i).name : "?")) : null })),
+      queue: state.queue.filter((i) => P(i)).map((i) => ({ name: P(i).name, wins: P(i).wins || 0, games: P(i).games, queuedAt: P(i).queuedAt })),
+      breaks: all.filter((p) => p.status === "break").map((p) => p.name),
+      log: state.log.map(logRow),
+      ranking: buildRanking(all).map((r) => ({ rank: r.rank, name: r.name, wins: r.wins, games: r.games, playing: r.status === "playing" })),
+    };
+  }
+  // every change to the session is copied to the shared page a moment later
+  function scheduleShare() {
+    if (!state.shareId || !window.DinkShare) return;
+    clearTimeout(shareT);
+    shareT = setTimeout(() => { if (state.shareId) window.DinkShare.publish(state.shareId, shareSnapshot()).catch(() => {}); }, 700);
+  }
+  // Complete Open Play: leave the final standings on the shared page, then the next open play gets a new id
+  function finalizeShare(snap) {
+    if (!state.shareId) return;
+    const id = state.shareId, created = state.shareCreated;
+    clearTimeout(shareT); state.shareId = null; state.shareCreated = null;
+    if (!window.DinkShare) return;
+    window.DinkShare.publish(id, {
+      v: 1, createdAt: created, expiresAt: created + SHARE_TTL, updatedAt: Date.now(), finished: true,
+      stats: { players: snap.players, waiting: 0, onCourt: 0, free: state.courts.length },
+      courts: [], queue: [], breaks: [], log: snap.log.map(logRow),
+      ranking: snap.ranking.map((r) => ({ rank: r.rank, name: r.name, wins: r.wins, games: r.games, playing: false })),
+    }).catch(() => {});
+  }
+  function stopShare(silent) {
+    const id = state.shareId;
+    clearTimeout(shareT); state.shareId = null; state.shareCreated = null;
+    if (id && window.DinkShare) window.DinkShare.remove(id).catch(() => {});
+    save();
+    if (!silent) { render(); toast("Sharing stopped"); }
+  }
+  // draws a QR code (dark squares on white, with a quiet margin) using the qrcode-generator library
+  function drawQr(cv, text, px) {
+    const qr = window.qrcode(0, "M"); qr.addData(text); qr.make();
+    const n = qr.getModuleCount(), margin = 3, cell = Math.max(2, Math.floor(px / (n + margin * 2))), size = cell * (n + margin * 2);
+    cv.width = cv.height = size;
+    const x = cv.getContext("2d"); x.fillStyle = "#ffffff"; x.fillRect(0, 0, size, size); x.fillStyle = "#0b2a24";
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) x.fillRect((c + margin) * cell, (r + margin) * cell, cell, cell);
+  }
+  async function openShare() {
+    if (!window.DinkShare) { toast("Sharing is still loading, try again in a moment"); return; }
+    const isNew = !state.shareId;
+    if (isNew) { state.shareId = newShareId(); state.shareCreated = Date.now(); }
+    openModal(`<div class="flex min-h-[16rem] flex-col items-center justify-center gap-3 text-center"><i class="fa-solid fa-circle-notch fa-spin text-2xl text-optic"></i><p class="text-sm text-white/60">Creating your share link…</p></div>`);
+    let id = state.shareId, retried = false;
+    try {
+      try { await window.DinkShare.publish(id, shareSnapshot()); }
+      catch (e) {
+        // the old link belongs to another account that used this device: start a fresh link for this account
+        if (isNew || !/permission|denied/i.test(String(e && (e.code || e.message)))) throw e;
+        retried = true; state.shareId = id = newShareId(); state.shareCreated = Date.now();
+        await window.DinkShare.publish(id, shareSnapshot());
+      }
+    }
+    catch (e) {
+      if ((isNew || retried) && state.shareId === id) { state.shareId = null; state.shareCreated = null; }
+      const denied = /permission|denied/i.test(String(e && (e.code || e.message)));
+      openModal(`<div class="flex items-start gap-3">
+          <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-red-500/15 text-red-300"><i class="fa-solid fa-triangle-exclamation"></i></span>
+          <div class="min-w-0"><h3 class="font-display text-xl font-bold leading-snug">Couldn't create the link</h3>
+            <p class="mt-1 text-sm text-white/60">${denied ? "The database refused the write. Make sure your open play account is active and the latest database rules are published." : esc((e && e.message) || "Check your internet connection and try again.")}</p></div></div>
+        <button id="shErrClose" class="mt-6 w-full rounded-xl bg-white/5 px-3 py-2.5 text-sm font-semibold hover:bg-white/10">Close</button>`);
+      $("#shErrClose").onclick = closeModal; return;
+    }
+    save();
+    if ($("#modal").classList.contains("hidden")) return; // closed while the link was being made
+    const url = new URL("activity.html?id=" + id, location.href).href;
+    const until = new Date(state.shareCreated + SHARE_TTL).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+    openModal(`
+      <div class="text-xs font-bold uppercase tracking-[.22em] text-optic">Live link</div>
+      <h3 class="mt-0.5 font-display text-2xl font-extrabold">Share this open play</h3>
+      <p class="mt-1 text-sm text-white/60">Players scan the code to follow the courts, queue and leaderboard on their own phone. It updates live.</p>
+      <div class="mt-4 flex justify-center"><canvas id="qrCv" width="464" height="464" class="rounded-2xl" style="background:#fff;width:232px;height:232px" aria-label="QR code for the open play link"></canvas></div>
+      <p id="qrMiss" class="mt-2 hidden text-center text-sm text-amber-200">The QR code could not load. Share the link below instead.</p>
+      <div class="mt-4 flex gap-2">
+        <input id="shUrl" readonly value="${esc(url)}" aria-label="Share link" class="h-11 min-w-0 flex-1 rounded-xl border border-white/15 bg-court-900 px-3 text-sm outline-none focus:border-optic" />
+        <button id="shCopy" type="button" class="h-11 shrink-0 rounded-xl bg-optic px-4 text-sm font-bold text-court-900 hover:bg-optic-dark"><i class="fa-solid fa-copy mr-2"></i>Copy</button>
+      </div>
+      <p class="mt-2 text-xs text-white/50">The link works until <b class="text-white/80">${esc(until)}</b>. After 7 days this open play is deleted from the database.</p>
+      <div class="mt-5 grid grid-cols-2 gap-2">
+        <button id="shQrDl" type="button" class="rounded-xl border border-optic/50 bg-optic/10 px-3 py-2.5 text-sm font-semibold text-optic hover:bg-optic/20"><i class="fa-solid fa-download mr-2"></i>Download QR</button>
+        <a href="${esc(url)}" target="_blank" rel="noopener" class="rounded-xl border border-white/15 px-3 py-2.5 text-center text-sm font-semibold hover:bg-white/10"><i class="fa-solid fa-arrow-up-right-from-square mr-2"></i>Open page</a>
+        <button id="shStop" type="button" class="col-span-2 rounded-xl border border-red-400/40 px-3 py-2.5 text-sm font-semibold text-red-300 hover:bg-red-500/10">Stop sharing</button>
+        <button id="shDone" type="button" class="col-span-2 rounded-xl bg-optic px-3 py-2.5 font-bold text-court-900 hover:bg-optic-dark">Done</button>
+      </div>`);
+    const miss = () => { $("#qrMiss").classList.remove("hidden"); $("#shQrDl").disabled = true; $("#shQrDl").classList.add("opacity-40"); };
+    try { drawQr($("#qrCv"), url, 464); } catch (e) { miss(); }
+    $("#shCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(url); }
+      catch (e) { const i = $("#shUrl"); i.select(); try { document.execCommand("copy"); } catch (e2) {} }
+      toast("Link copied");
+    };
+    $("#shQrDl").onclick = () => {
+      let href; try { const cv = document.createElement("canvas"); drawQr(cv, url, 1024); href = cv.toDataURL("image/png"); } catch (e) { return; }
+      const a = document.createElement("a"); a.href = href; a.download = "dinkhub-open-play-qr.png"; document.body.appendChild(a); a.click(); a.remove(); toast("QR code saved");
+    };
+    $("#shDone").onclick = closeModal;
+    $("#shStop").onclick = () => confirmModal({ title: "Stop sharing?", body: "The link and QR code stop working and this open play is removed from the database. Sharing again makes a new link.", label: "Stop sharing", icon: "fa-link-slash", danger: true, onYes: () => stopShare() });
   }
 
   // ---- Render ----
@@ -898,6 +1025,7 @@
     { sel: "#sec-log", title: "Finished games", body: "Every completed game is listed here with the winners marked by a trophy. Use Clear if you want to wipe the list without ending the session." },
     { sel: "#sec-leaderboard > div", title: "Leaderboard", body: "A live ranking of everyone who has played, updated after every game. Players are ordered by wins, and on equal wins the one with fewer games played ranks higher. A glowing dot means the player is on court right now, and the thin bar shows win rate." },
     { sel: '[data-a="finish"]', title: "Complete Open Play", body: "When the session is over, this shows the final ranking by wins (fewer games played breaks ties) and lets you save the results as a CSV or as an image for Instagram and Facebook (Story 9:16 or Post 1:1). Then the players, courts and history are cleared for the next session." },
+    { sel: "#btnShare", title: "Share with players", body: "Tap Share to get a QR code. Players scan it to follow the courts, queue and leaderboard live on their own phone. Each open play gets its own link, and it is deleted from the database after 7 days." },
     { sel: "#btnSettings", title: "Settings", body: "Change the number of courts any time, or reset the whole session. Only empty courts can be removed." },
     { title: "You're ready", body: "Add your first players to get started. You can reopen this tour any time with the Tour button at the top." },
   ];
@@ -1057,6 +1185,7 @@
     const a = b.dataset.a, id = b.dataset.id, c = state.courts.find((x) => x.id === b.dataset.c);
     if (a === "mode") { state.winnersStay = b.dataset.v === "stay"; save(); render(); toast(state.winnersStay ? "Winners stay on court" : "Everyone rotates"); }
     else if (a === "partner") { state.fixedPartner = b.dataset.v === "fixed"; save(); render(); toast(state.fixedPartner ? "Fixed partners" : "Rotating partners"); }
+    else if (a === "share") openShare();
     else if (a === "finish") finishModal();
     else if (a === "break") confirmBreak(id);
     else if (a === "back") confirmRejoin(id);

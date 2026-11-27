@@ -10,7 +10,9 @@
             href="../icons/favicon-32.png" />
         <script>
 try { var th = localStorage.getItem("dinkhub_theme") === "light" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", th); } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+document.documentElement.classList.add("auth-pending"); // share.js removes this once the sign-in is confirmed, or sends the visitor to auth.html
 </script>
+        <style>html.auth-pending body { visibility: hidden; }</style>
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
 tailwind.config = {
@@ -134,7 +136,7 @@ tailwind.config = {
                         <h1
                             class="truncate font-display text-xl font-extrabold">Dink<span
                                 class="text-optic">Hub</span></h1>
-                        <p class="truncate text-xs text-white/55">Open play</p>
+                        <p id="clubName" class="truncate text-xs text-white/55">Open play</p>
                     </div>
                 </div>
 
@@ -146,6 +148,10 @@ tailwind.config = {
                             class="ml-2 hidden whitespace-nowrap sm:inline">Complete Open Play</span></button>
                     <span id="clock"
                         class="num hidden font-display text-lg font-semibold text-white/80 md:inline">--:--</span>
+                    <button id="btnShare" data-a="share" title="Share with players" aria-label="Share this open play with a QR code"
+                        class="flex h-10 items-center gap-2 rounded-xl bg-white/5 px-3 text-sm font-semibold hover:bg-white/10"><i
+                            class="fa-solid fa-qrcode"></i><span
+                            class="hidden md:inline">Share</span></button>
                     <button id="btnTour"
                         class="flex h-10 items-center gap-2 rounded-xl bg-white/5 px-3 text-sm font-semibold hover:bg-white/10"
                         aria-label="Take a tour of this page"><i
@@ -293,6 +299,8 @@ tailwind.config = {
         <div id="toast" role="status"
             class="pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 translate-y-10 rounded-full bg-optic px-4 py-2 text-center text-xs font-bold text-court-900 opacity-0 transition-all sm:text-sm"></div>
 
+        <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+        <script type="module" src="share.js"></script>
         <script src="dashboard.js"></script>
     </body>
 </html>
