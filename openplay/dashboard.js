@@ -111,7 +111,7 @@
     state.autoFill = !state.autoFill;
     const n = autoFillCourts();
     save(); render();
-    toast(state.autoFill ? (n ? `Auto-fill on · ${n} court${n > 1 ? "s" : ""} started` : "Auto-fill on") : "Auto-fill off · start games manually");
+    toast(state.autoFill ? (n ? `Auto-fill on · ${n} court${n > 1 ? "s" : ""} started, games start automatically` : "Auto-fill on · games start automatically") : "Auto-fill off · start games manually");
   }
   function subOut(c, id, silent) {
     const idx = c.players.indexOf(id);
@@ -159,7 +159,7 @@
 
   // ---- Modals ----
   let modalLocked = false;
-  function openModal(html, locked, wide) { modalLocked = !!locked; const mb = $("#modalBody"); mb.style.maxWidth = wide ? (typeof wide === "string" ? wide : "42rem") : ""; mb.scrollTop = 0; mb.innerHTML = html; $("#modal").classList.remove("hidden"); $("#modal").classList.add("flex"); }
+  function openModal(html, locked, wide) { modalLocked = !!locked; const mb = $("#modalBody"); mb.style.maxWidth = wide ? (typeof wide === "string" ? wide : "42rem") : ""; mb.scrollTop = 0; mb.style.overflowY = ""; mb.innerHTML = html; $("#modal").classList.remove("hidden"); $("#modal").classList.add("flex"); }
   function closeModal() {
     modalLocked = false; $("#modal").classList.add("hidden"); $("#modal").classList.remove("flex");
     if (!state.setupDone) setTimeout(courtsSetupModal, 0); // a new session always starts by asking for the courts
@@ -347,21 +347,28 @@
   }
   function resultsModal(snap) {
     const rk = snap.ranking, winners = rk.filter((r) => r.wins > 0);
-    const pod = winners.slice(0, 3), rest = rk.slice(pod.length);
+    // everyone who shares a top-3 rank stands on the podium (ties included, up to 8)
+    const pod = winners.filter((r) => r.rank <= 3).slice(0, 8), rest = rk.filter((r) => !pod.includes(r));
     const n = rest.length, dense = n > 10, cols = n > 16 ? 3 : n > 5 ? 2 : 1;
     const gridCls = ["", "grid-cols-1", "grid-cols-1 sm:grid-cols-2", "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"][cols];
     const width = !n ? "34rem" : cols === 1 ? "52rem" : cols === 2 ? "64rem" : "76rem";
     const ini = (s) => s.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
     // pillar heights scale with the window height so the whole screen fits without scrolling
     const TONE = { 1: { c: "#d7ff3f", h: "clamp(4.5rem,15vh,7rem)", d: 0.45 }, 2: { c: "#cbd5e1", h: "clamp(3.4rem,11vh,5.25rem)", d: 0.25 }, 3: { c: "#e0a458", h: "clamp(2.6rem,8vh,4rem)", d: 0.1 } };
-    const col = (r) => {
-      const t = TONE[Math.min(r.rank, 3)], first = r.rank === 1;
-      return `<div class="flex min-w-0 flex-col items-center">
-        ${first ? `<i class="fa-solid fa-crown rk-fade mb-0.5 text-xl" style="color:${t.c};animation-delay:${t.d + 0.5}s"></i>` : ""}
-        <div class="rk-fade ${first ? "rk-pulse h-[4.5rem] w-[4.5rem] text-2xl" : "h-12 w-12 text-lg"} relative flex items-center justify-center rounded-full font-display font-extrabold" style="background:${t.c};color:#0b2a24;animation-delay:${t.d + 0.3}s;box-shadow:0 0 0 4px ${t.c}33${first ? `,0 0 32px ${t.c}66` : ""}">${esc(ini(r.name))}</div>
-        <div class="rk-fade mt-1.5 w-full truncate text-center font-display ${first ? "text-lg" : "text-base"} font-bold leading-tight" style="animation-delay:${t.d + 0.35}s">${esc(r.name)}</div>
-        <div class="rk-fade num text-center text-xs text-white/60" style="animation-delay:${t.d + 0.4}s"><b class="text-sm text-white">${r.wins} ${r.wins === 1 ? "win" : "wins"}</b> · ${r.games} played</div>
-        <div class="mt-2 w-full overflow-hidden rounded-t-xl" style="height:${t.h}"><div class="rk-rise flex h-full items-start justify-center pt-1.5 font-display text-3xl font-extrabold" style="background:linear-gradient(180deg,${t.c},${t.c}40);color:#0b2a24;animation-delay:${t.d}s">${r.rank}</div></div></div>`;
+    // one pillar per place (1st, 2nd, 3rd); players who tie share it and are stacked vertically above it
+    const colG = (k, compact) => {
+      const g = tierOf(k), t = TONE[k], first = k === 1, tied = g.length > 1;
+      const who = (r, i) => {
+        const av = compact ? "h-9 w-9 text-sm" : tied ? (first ? "h-11 w-11 text-base" : "h-10 w-10 text-sm") : first ? "rk-pulse h-[4.5rem] w-[4.5rem] text-2xl" : "h-12 w-12 text-lg";
+        const d = t.d + 0.3 + i * 0.08;
+        const crown = first ? `<i class="fa-solid fa-crown rk-fade mb-0.5 ${tied ? "text-sm" : "text-xl"}" style="color:${t.c};animation-delay:${d + 0.2}s"></i>` : "";
+        return `<div class="flex w-full min-w-0 flex-col items-center ${tied ? (compact ? "mb-1.5" : "mb-3") : ""}">${crown}
+          <div class="rk-fade ${av} relative flex items-center justify-center rounded-full font-display font-extrabold" style="background:${t.c};color:#0b2a24;animation-delay:${d}s;box-shadow:0 0 0 4px ${t.c}33${first && !tied ? `,0 0 32px ${t.c}66` : ""}">${esc(ini(r.name))}</div>
+          <div class="rk-fade mt-1.5 w-full truncate text-center font-display ${first && !tied ? "text-lg" : "text-base"} font-bold leading-tight" style="animation-delay:${d + 0.05}s">${esc(r.name)}</div>
+          <div class="rk-fade num text-center text-xs text-white/60" style="animation-delay:${d + 0.1}s"><b class="text-sm text-white">${r.wins} ${r.wins === 1 ? "win" : "wins"}</b> · ${r.games} played</div></div>`;
+      };
+      return `<div class="flex min-w-0 flex-col items-center">${g.map(who).join("")}
+        <div class="mt-2 w-full overflow-hidden rounded-t-xl" style="height:${compact ? "clamp(1.75rem,5vh,2.75rem)" : t.h}"><div class="rk-rise flex h-full items-start justify-center pt-1 font-display ${compact ? "text-xl" : "text-3xl"} font-extrabold" style="background:linear-gradient(180deg,${t.c},${t.c}40);color:#0b2a24;animation-delay:${t.d}s">${k}</div></div></div>`;
     };
     const row = (r, i) => {
       const pct = r.games ? Math.round((r.wins / r.games) * 100) : 0;
@@ -381,9 +388,21 @@
     const colors = ["#d7ff3f", "#ffffff", "#e0a458", "#cbd5e1"];
     const confetti = pod.length ? Array.from({ length: 26 }, (_, i) =>
       `<i class="rk-conf" style="left:${(i * 37) % 100}%;background:${colors[i % 4]};--x:${((i * 53) % 80) - 40}px;--r:${((i * 97) % 720) - 360}deg;animation-delay:${(0.5 + ((i * 7) % 10) * 0.09).toFixed(2)}s"></i>`).join("") : "";
-    const order = [pod[1], pod[0], pod[2]].filter(Boolean);
-    const podium = pod.length
-      ? `<div class="grid grid-cols-3 items-end gap-2 sm:gap-3">${order.map(col).join("")}</div>`
+    const tierOf = (k) => pod.filter((r) => r.rank === k), tiers = [2, 1, 3].filter((k) => tierOf(k).length);
+    // a tie for 2nd or 3rd: the champion stands alone on top, and 2nd / 3rd place are listed below with a medal on the left and the name beside it
+    const tieBelow = tierOf(2).length > 1 || tierOf(3).length > 1;
+    const medalRow = (r, i) => {
+      const t = TONE[r.rank], d = 0.7 + i * 0.07;
+      return `<li class="rk-fade flex items-center gap-2.5 rounded-xl px-2.5 py-1.5" style="background:${t.c}22;box-shadow:inset 0 0 0 1px ${t.c}66;animation-delay:${d}s">
+        <span class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style="background:${t.c};color:#0b2a24" title="${r.rank === 2 ? "2nd place" : "3rd place"}"><i class="fa-solid fa-medal"></i><span class="num absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-court-900 text-[10px] font-extrabold" style="color:${t.c}">${r.rank}</span></span>
+        <span class="min-w-0 flex-1 truncate font-display font-bold">${esc(r.name)}</span>
+        <span class="num shrink-0 text-right text-xs leading-tight text-white/60"><b class="text-sm text-white">${r.wins} ${r.wins === 1 ? "win" : "wins"}</b><br>${r.games} played</span></li>`;
+    };
+    const podium = pod.length && tieBelow
+      ? `<div class="mx-auto max-w-[14rem]">${colG(1, true)}</div>
+         <ul class="mt-3 grid gap-1.5 sm:grid-cols-2">${[...tierOf(2), ...tierOf(3)].map(medalRow).join("")}</ul>`
+      : pod.length
+      ? `<div class="grid items-end gap-2 sm:gap-3" style="grid-template-columns:repeat(${tiers.length},minmax(0,1fr))">${tiers.map(colG).join("")}</div>`
       : `<p class="rounded-xl border border-dashed border-white/20 p-5 text-center text-sm text-white/55">No games had a winner, so there is no podium.</p>`;
     const list = n ? `<div class="min-w-0 lg:self-center">
         <div class="flex items-baseline justify-between"><span class="text-xs font-bold uppercase tracking-wider text-white/45">${pod.length ? "The rest of the field" : "Players"}</span><span class="num text-xs text-white/40">${n} ${n === 1 ? "player" : "players"}</span></div>
@@ -402,12 +421,277 @@
           <div class="min-w-0">${podium}</div>${list}
         </div>
         <div class="mt-5 grid grid-cols-2 gap-2">
+          <button id="mImg" class="rounded-xl border border-optic/50 bg-optic/10 px-3 py-2.5 text-sm font-semibold text-optic hover:bg-optic/20"><i class="fa-solid fa-image mr-2"></i>Save as image</button>
           <button id="mCsv" class="rounded-xl border border-white/15 px-3 py-2.5 text-sm font-semibold hover:bg-white/10"><i class="fa-solid fa-download mr-2"></i>Save results (CSV)</button>
-          <button id="mDone" class="rounded-xl bg-optic px-3 py-2.5 font-bold text-court-900 hover:bg-optic-dark">Done</button>
+          <button id="mDone" class="col-span-2 rounded-xl bg-optic px-3 py-2.5 font-bold text-court-900 hover:bg-optic-dark">Done</button>
         </div>
       </div>`, false, width);
     $("#mCsv").onclick = () => downloadCsv(snap);
+    $("#mImg").onclick = () => shareModal(snap);
     $("#mDone").onclick = closeModal;
+  }
+  // ---- Share image: saves the top 3 as a PNG for Instagram / Facebook ----
+  // Story = 9:16 (1080 x 1920), Post = 1:1 (1080 x 1080). Drawn on a canvas so it needs no extra library.
+  const SHARE = {
+    story: { w: 1080, h: 1920, s: 1.1, cw: 310, gap: 14, name: "Story", ratio: "9:16", note: "Instagram & Facebook Story" },
+    post: { w: 1080, h: 1080, s: 0.84, cw: 262, gap: 12, name: "Post", ratio: "1:1", note: "Instagram & Facebook feed" },
+  };
+  async function drawShare(snap, key) {
+    const F = SHARE[key], W = F.w, H = F.h, s = F.s, story = key === "story";
+    try {
+      await Promise.all([
+        document.fonts.load('800 64px "Bricolage Grotesque"'), document.fonts.load('700 32px "Bricolage Grotesque"'),
+        document.fonts.load('500 32px "DM Sans"'), document.fonts.load('700 32px "DM Sans"'),
+      ]);
+    } catch (e) {}
+    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
+    const x = cv.getContext("2d");
+    const DISPLAY = '"Bricolage Grotesque", "DM Sans", sans-serif', BODY = '"DM Sans", sans-serif', OPTIC = "#d7ff3f";
+    const spaced = (v) => { if ("letterSpacing" in x) x.letterSpacing = v; };
+    const fit = (str, maxW) => {
+      if (x.measureText(str).width <= maxW) return str;
+      let t = str; while (t.length > 1 && x.measureText(t + "…").width > maxW) t = t.slice(0, -1);
+      return t.trimEnd() + "…";
+    };
+    // o: px, wt, fam, c (colour), a (align), max (shrinks then truncates to fit), ls (letter spacing)
+    const text = (str, tx, ty, o) => {
+      let px = o.px; const wt = o.wt || 500, fam = o.fam || BODY, set = () => (x.font = `${wt} ${Math.round(px)}px ${fam}`);
+      x.textAlign = o.a || "left"; x.textBaseline = "alphabetic"; x.fillStyle = o.c || "#fff"; spaced(o.ls || "0px"); set();
+      if (o.max) { while (px > o.px * 0.72 && x.measureText(str).width > o.max) { px -= 2; set(); } str = fit(str, o.max); }
+      x.fillText(str, tx, ty); spaced("0px");
+    };
+    const rr = (rx, ry, rw, rh, r) => { x.beginPath(); if (x.roundRect) x.roundRect(rx, ry, rw, rh, r); else x.rect(rx, ry, rw, rh); };
+    const ini = (n) => n.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+    const sparkle = (px, py, r, a) => {
+      x.save(); x.globalAlpha = a; x.fillStyle = OPTIC; x.beginPath(); x.moveTo(px, py - r);
+      x.quadraticCurveTo(px, py, px + r, py); x.quadraticCurveTo(px, py, px, py + r); x.quadraticCurveTo(px, py, px - r, py); x.quadraticCurveTo(px, py, px, py - r);
+      x.fill(); x.restore();
+    };
+
+    const winners = snap.ranking.filter((r) => r.wins > 0 && r.rank <= 3); // ties share their place
+    const pod = winners.slice(0, 8), extra = winners.length - pod.length;
+    // a tie for 2nd or 3rd: the champion stands alone on a shorter pillar and 2nd / 3rd are listed below with a medal
+    const tieBelow = pod.filter((r) => r.rank === 2).length > 1 || pod.filter((r) => r.rank === 3).length > 1;
+    const baseY = tieBelow ? (story ? 1180 : 740) : story ? 1380 : 930, PH = [0, (tieBelow ? (story ? 200 : 150) : 360) * s, 270 * s, 200 * s], firstRad = 110 * s;
+    const spotY = baseY - PH[1] - 150 * s - firstRad;
+
+    // ---- background ----
+    let g = x.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "#0f3a32"); g.addColorStop(1, "#0a241f");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    // faint pickleball court lines running through the whole canvas (kitchen lines, centre lines, net)
+    {
+      const cx0 = 40, cw0 = W - 80, ch0 = cw0 * 2.2, cy0 = H / 2 - ch0 / 2, net = cy0 + ch0 / 2, kit = (ch0 / 2) * (7 / 22);
+      x.save(); x.strokeStyle = "rgba(215,255,63,.07)"; x.lineWidth = 6; x.lineJoin = "round";
+      x.strokeRect(cx0, cy0, cw0, ch0); x.beginPath();
+      x.moveTo(cx0, net - kit); x.lineTo(cx0 + cw0, net - kit); x.moveTo(cx0, net + kit); x.lineTo(cx0 + cw0, net + kit);
+      x.moveTo(W / 2, cy0); x.lineTo(W / 2, net - kit); x.moveTo(W / 2, net + kit); x.lineTo(W / 2, cy0 + ch0); x.stroke();
+      x.setLineDash([14, 12]); x.lineWidth = 8; x.strokeStyle = "rgba(255,255,255,.08)"; x.beginPath(); x.moveTo(0, net); x.lineTo(W, net); x.stroke(); x.restore();
+    }
+    g = x.createRadialGradient(W / 2, 0, 0, W / 2, 0, W * 0.95); g.addColorStop(0, "rgba(215,255,63,.26)"); g.addColorStop(1, "rgba(215,255,63,0)");
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    if (pod.length) { // spotlight on the winner
+      g = x.createRadialGradient(W / 2, spotY, 0, W / 2, spotY, 600 * s); g.addColorStop(0, "rgba(215,255,63,.22)"); g.addColorStop(1, "rgba(215,255,63,0)");
+      x.fillStyle = g; x.fillRect(0, 0, W, H);
+    }
+    g = x.createLinearGradient(0, 0, W, 0); g.addColorStop(0, "rgba(215,255,63,0)"); g.addColorStop(0.5, OPTIC); g.addColorStop(1, "rgba(215,255,63,0)");
+    x.fillStyle = g; x.fillRect(0, 0, W, story ? 10 : 8);
+    if (pod.length) {
+      const cc = [OPTIC, "#ffffff", "#e0a458", "#cbd5e1"];
+      for (let i = 0; i < 52; i++) {
+        const cx = ((i * 137) % 100) / 100 * W, cy = 30 + ((i * 53) % 100) / 100 * (story ? 1000 : 560), sz = (10 + (i % 4) * 4) * (story ? 1 : 0.8);
+        x.save(); x.translate(cx, cy); x.rotate((((i * 97) % 360) * Math.PI) / 180); x.globalAlpha = 0.5; x.fillStyle = cc[i % 4];
+        x.fillRect(-sz / 2, -sz / 4, sz, sz / 2); x.restore();
+      }
+    }
+
+    // ---- header ----
+    const dateStr = new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+    const mins = Math.max(1, Math.round(snap.duration / 60000));
+    const topY = story ? 240 : 66;
+    {
+      const px = story ? 26 : 22; x.font = `700 ${px}px ${BODY}`; spaced("6px");
+      const pw = x.measureText("FINAL STANDINGS").width + (story ? 64 : 52); spaced("0px");
+      const ph = story ? 56 : 46; rr(W / 2 - pw / 2, topY - ph + 18, pw, ph, ph / 2);
+      x.fillStyle = "rgba(215,255,63,.1)"; x.fill(); x.strokeStyle = "rgba(215,255,63,.5)"; x.lineWidth = 2; x.stroke();
+      text("FINAL STANDINGS", W / 2 + 3, topY, { px, wt: 700, c: OPTIC, a: "center", ls: "6px" });
+    }
+    text("Open Play", W / 2, topY + (story ? 130 : 94), { px: story ? 116 : 74, wt: 800, fam: DISPLAY, a: "center" });
+    if (story) text(dateStr, W / 2, topY + 186, { px: 32, wt: 500, c: "rgba(255,255,255,.7)", a: "center" });
+    else text(`${dateStr} · ${snap.players} ${snap.players === 1 ? "player" : "players"} · ${snap.log.length} ${snap.log.length === 1 ? "game" : "games"} · ${mins} min`, W / 2, topY + 136, { px: 25, wt: 500, c: "rgba(255,255,255,.7)", a: "center", max: W - 140 });
+
+    // ---- podium: top 3 only ----
+    if (pod.length) {
+      const TONE = { 1: OPTIC, 2: "#cbd5e1", 3: "#e0a458" }, LABEL = { 1: "CHAMPION", 2: "RUNNER-UP", 3: "THIRD PLACE" };
+      // one pillar per place; players who tie share it and are stacked vertically above it
+      const tierOf = (k) => pod.filter((r) => r.rank === k), tiers = (tieBelow ? [1] : [2, 1, 3]).filter((k) => tierOf(k).length);
+      const cw = F.cw, gap = F.gap, total = tiers.length * cw + (tiers.length - 1) * gap, startX = (W - total) / 2, hdrBottom = story ? 450 : 222;
+      // glowing platform under the pillars
+      g = x.createLinearGradient(startX - 40, 0, startX + total + 40, 0); g.addColorStop(0, "rgba(215,255,63,0)"); g.addColorStop(0.5, "rgba(215,255,63,.75)"); g.addColorStop(1, "rgba(215,255,63,0)");
+      x.fillStyle = g; rr(startX - 40, baseY, total + 80, 14 * s, 7); x.fill();
+      tiers.forEach((k, i) => {
+        const grp = tierOf(k), tied = grp.length > 1, c = TONE[k], first = k === 1;
+        const cx = startX + i * (cw + gap) + cw / 2, ph = PH[k], top = baseY - ph, kw = 84 * s, kh = 52 * s;
+        const crown = (ky) => {
+          const kx = cx - kw / 2;
+          x.fillStyle = c; x.beginPath(); x.moveTo(kx, ky + kh); x.lineTo(kx, ky + kh * 0.25); x.lineTo(kx + kw * 0.25, ky + kh * 0.6); x.lineTo(cx, ky);
+          x.lineTo(kx + kw * 0.75, ky + kh * 0.6); x.lineTo(kx + kw, ky + kh * 0.25); x.lineTo(kx + kw, ky + kh); x.closePath(); x.fill();
+        };
+        // pillar with gloss
+        const pg = x.createLinearGradient(0, top, 0, baseY); pg.addColorStop(0, c); pg.addColorStop(1, c + "33");
+        x.fillStyle = pg; rr(cx - cw / 2, top, cw, ph, [24 * s, 24 * s, 0, 0]); x.fill();
+        x.save(); rr(cx - cw / 2, top, cw, ph, [24 * s, 24 * s, 0, 0]); x.clip();
+        const sh = x.createLinearGradient(cx - cw / 2, 0, cx + cw / 2, 0); sh.addColorStop(0, "rgba(255,255,255,.28)"); sh.addColorStop(0.45, "rgba(255,255,255,0)");
+        x.fillStyle = sh; x.fillRect(cx - cw / 2, top, cw, ph); x.fillStyle = "rgba(255,255,255,.45)"; x.fillRect(cx - cw / 2, top, cw, 8 * s); x.restore();
+        text(String(k), cx, top + 94 * s, { px: 84 * s, wt: 800, fam: DISPLAY, c: "#0b2a24", a: "center" });
+        text(tied ? (k === 1 ? "CO-CHAMPION" : "TIED " + (k === 2 ? "2ND" : "3RD")) : LABEL[k], cx, top + 138 * s, { px: 20 * s, wt: 800, c: "rgba(11,42,36,.75)", a: "center", ls: "3px", max: cw - 14 });
+        if (!tied) {
+          const r = grp[0], rad = (first ? 110 : 84) * s;
+          text(`${r.wins} ${r.wins === 1 ? "win" : "wins"} · ${r.games} played`, cx, top - 28 * s, { px: 30 * s, wt: 600, c: "rgba(255,255,255,.8)", a: "center", max: cw + gap - 8 });
+          text(r.name, cx, top - 76 * s, { px: (first ? 54 : 44) * s, wt: 800, fam: DISPLAY, a: "center", max: cw + gap - 8 });
+          const ay = top - 150 * s - rad;
+          x.save(); if (first) { x.shadowColor = "rgba(215,255,63,.6)"; x.shadowBlur = 60 * s; }
+          x.beginPath(); x.arc(cx, ay, rad, 0, Math.PI * 2); x.fillStyle = c; x.fill(); x.restore();
+          x.beginPath(); x.arc(cx, ay, rad - 11 * s, 0, Math.PI * 2); x.strokeStyle = "rgba(11,42,36,.18)"; x.lineWidth = 3; x.stroke();
+          x.beginPath(); x.arc(cx, ay, rad + 11 * s, 0, Math.PI * 2); x.strokeStyle = c + "55"; x.lineWidth = 6 * s; x.stroke();
+          text(ini(r.name), cx, ay + rad * 0.3, { px: rad * 0.86, wt: 800, fam: DISPLAY, c: "#0b2a24", a: "center" });
+          if (first) {
+            crown(ay - rad - 24 * s - kh);
+            sparkle(cx - rad - 78 * s, ay - 34 * s, 20 * s, 0.9); sparkle(cx + rad + 70 * s, ay - 70 * s, 28 * s, 0.95);
+            sparkle(cx + rad + 52 * s, ay + 58 * s, 14 * s, 0.8); sparkle(cx - rad - 54 * s, ay + 78 * s, 12 * s, 0.7);
+          }
+        } else {
+          // tied: names stacked vertically, each on its own card, scaled to leave room under the header
+          const gapR = 8 * s, availG = top - hdrBottom - 22 * s - (first ? kh + 24 * s : 0);
+          const rowH = Math.max(34 * s, Math.min(84 * s, (availG + gapR) / grp.length - gapR));
+          const rowsTop = top - 22 * s - (grp.length * rowH + (grp.length - 1) * gapR), nw = cw - rowH - 14 * s;
+          grp.forEach((r, j) => {
+            const ry = rowsTop + j * (rowH + gapR), mid = ry + rowH / 2, ar = rowH / 2 - 9 * s, ax = cx - cw / 2 + rowH / 2;
+            x.fillStyle = c + "22"; rr(cx - cw / 2, ry, cw, rowH, rowH * 0.32); x.fill(); x.strokeStyle = c + "88"; x.lineWidth = 2; x.stroke();
+            x.beginPath(); x.arc(ax, mid, ar, 0, Math.PI * 2); x.fillStyle = c; x.fill();
+            text(ini(r.name), ax, mid + ar * 0.3, { px: ar * 0.9, wt: 800, fam: DISPLAY, c: "#0b2a24", a: "center" });
+            text(r.name, cx - cw / 2 + rowH + 2 * s, mid - rowH * 0.02, { px: rowH * 0.38, wt: 800, fam: DISPLAY, a: "left", max: nw });
+            text(`${r.wins} ${r.wins === 1 ? "win" : "wins"} · ${r.games} played`, cx - cw / 2 + rowH + 2 * s, mid + rowH * 0.3, { px: rowH * 0.24, wt: 600, c: "rgba(255,255,255,.78)", a: "left", max: nw });
+          });
+          if (first) crown(rowsTop - 20 * s - kh);
+        }
+      });
+      if (tieBelow) {
+        // 2nd and 3rd place: medal on the left, name beside it (two columns when there are many)
+        const list = [...tierOf(2), ...tierOf(3)], n = list.length;
+        const cols = story ? (n > 5 ? 2 : 1) : (n > 2 ? 2 : 1), rowsN = Math.ceil(n / cols);
+        const areaTop = baseY + (story ? 56 : 36), areaBot = story ? 1640 : 946, gapR = 10 * s;
+        const rowH = Math.max(30 * s, Math.min(story ? 96 : 76, (areaBot - areaTop + gapR) / rowsN - gapR));
+        const rowW = cols === 1 ? (story ? 700 : 600) : (W - 120 - 20) / 2, gridW = cols * rowW + (cols - 1) * 20, gx = (W - gridW) / 2;
+        const TONE2 = { 2: "#cbd5e1", 3: "#e0a458" };
+        list.forEach((r, i) => {
+          const col = cols === 1 ? 0 : Math.floor(i / rowsN), row = cols === 1 ? i : i % rowsN;
+          const rx = gx + col * (rowW + 20), ry = areaTop + row * (rowH + gapR), mid = ry + rowH / 2, c = TONE2[r.rank];
+          x.fillStyle = c + "22"; rr(rx, ry, rowW, rowH, rowH * 0.3); x.fill(); x.strokeStyle = c + "88"; x.lineWidth = 2; x.stroke();
+          // medal: ribbon, disc, rank number
+          const mr = rowH * 0.3, mx = rx + rowH * 0.62, my = mid + rowH * 0.06;
+          x.fillStyle = c + "99"; x.beginPath(); x.moveTo(mx - mr * 0.8, my - mr * 0.2); x.lineTo(mx - mr * 0.1, my - mr * 0.2); x.lineTo(mx - mr * 0.45, my - mr * 1.55); x.lineTo(mx - mr * 1.15, my - mr * 1.55); x.closePath(); x.fill();
+          x.beginPath(); x.moveTo(mx + mr * 0.8, my - mr * 0.2); x.lineTo(mx + mr * 0.1, my - mr * 0.2); x.lineTo(mx + mr * 0.45, my - mr * 1.55); x.lineTo(mx + mr * 1.15, my - mr * 1.55); x.closePath(); x.fill();
+          x.beginPath(); x.arc(mx, my, mr, 0, Math.PI * 2); x.fillStyle = c; x.fill();
+          x.beginPath(); x.arc(mx, my, mr - 4 * s, 0, Math.PI * 2); x.strokeStyle = "rgba(11,42,36,.25)"; x.lineWidth = 2; x.stroke();
+          text(String(r.rank), mx, my + mr * 0.36, { px: mr * 1.1, wt: 800, fam: DISPLAY, c: "#0b2a24", a: "center" });
+          const tx = rx + rowH * 1.3, tw = rowW - rowH * 1.3 - 16 * s;
+          text(r.name, tx, mid - rowH * 0.02, { px: rowH * 0.36, wt: 800, fam: DISPLAY, a: "left", max: tw });
+          text(`${r.wins} ${r.wins === 1 ? "win" : "wins"} · ${r.games} played`, tx, mid + rowH * 0.3, { px: rowH * 0.23, wt: 600, c: "rgba(255,255,255,.78)", a: "left", max: tw });
+        });
+        if (extra > 0) text(`+${extra} more tied`, W / 2, areaTop + rowsN * (rowH + gapR) + (story ? 22 : 14), { px: story ? 24 : 18, wt: 600, c: "rgba(255,255,255,.6)", a: "center" });
+      } else if (extra > 0) text(`+${extra} more tied`, W / 2, baseY + (story ? 58 : 32), { px: story ? 24 : 20, wt: 600, c: "rgba(255,255,255,.6)", a: "center" });
+    } else {
+      text("No games had a winner", W / 2, story ? 700 : 460, { px: story ? 44 : 32, wt: 600, c: "rgba(255,255,255,.6)", a: "center" });
+    }
+
+    // ---- story extras: congratulations + session stats ----
+    if (story && !tieBelow) {
+      text("CONGRATULATIONS!", W / 2, baseY + 96, { px: 30, wt: 800, fam: DISPLAY, c: OPTIC, a: "center", ls: "8px" });
+      const chips = [[snap.players, snap.players === 1 ? "PLAYER" : "PLAYERS"], [snap.log.length, snap.log.length === 1 ? "GAME" : "GAMES"], [mins, "MINUTES"]];
+      const cwid = 296, cg = 20, cx0 = (W - (3 * cwid + 2 * cg)) / 2, cy = baseY + 128;
+      chips.forEach(([v, l], i) => {
+        const rx = cx0 + i * (cwid + cg);
+        x.fillStyle = "rgba(255,255,255,.06)"; rr(rx, cy, cwid, 96, 24); x.fill(); x.strokeStyle = "rgba(215,255,63,.28)"; x.lineWidth = 2; x.stroke();
+        text(String(v), rx + cwid / 2, cy + 56, { px: 46, wt: 800, fam: DISPLAY, a: "center" });
+        text(l, rx + cwid / 2, cy + 84, { px: 18, wt: 700, c: "rgba(255,255,255,.55)", a: "center", ls: "4px" });
+      });
+    }
+
+    // ---- footer: brand + developer credit ----
+    {
+      const fy = story ? 1682 : 988, bpx = story ? 30 : 24;
+      x.font = `800 ${bpx}px ${DISPLAY}`; spaced("8px"); const tw = x.measureText("DINKHUB").width; spaced("0px");
+      const dot = story ? 14 : 12, sx = (W - (dot + 16 + tw)) / 2;
+      x.beginPath(); x.arc(sx + dot / 2, fy - bpx * 0.34, dot / 2, 0, Math.PI * 2); x.fillStyle = OPTIC; x.fill();
+      text("DINKHUB", sx + dot + 16, fy, { px: bpx, wt: 800, fam: DISPLAY, c: OPTIC, a: "left", ls: "8px" });
+      const cy2 = story ? 1734 : H - 38, px2 = story ? 26 : 21;
+      x.fillStyle = "rgba(255,255,255,.14)"; x.fillRect(W / 2 - 70, cy2 - px2 - (story ? 18 : 14), 140, 2);
+      x.font = `500 ${px2}px ${BODY}`; const w1 = x.measureText("Developed by ").width;
+      x.font = `700 ${px2}px ${BODY}`; const w2 = x.measureText("EM Development Solutions").width, ox = (W - w1 - w2) / 2;
+      text("Developed by ", ox, cy2, { px: px2, wt: 500, c: "rgba(255,255,255,.55)" });
+      text("EM Development Solutions", ox + w1, cy2, { px: px2, wt: 700, c: "rgba(255,255,255,.92)" });
+    }
+    return cv;
+  }
+  function shareModal(snap, key) {
+    key = key || "story";
+    let token = 0, blob = null, url = null;
+    const FILE = () => `dinkhub-open-play-${key}-${new Date().toISOString().slice(0, 10)}.png`;
+    const canShare = !!(navigator.canShare && navigator.share && (() => { try { return navigator.canShare({ files: [new File([""], "a.png", { type: "image/png" })] }); } catch (e) { return false; } })());
+    openModal(`
+      <div class="relative grid gap-4 md:grid-cols-[minmax(0,1fr)_17rem] md:gap-6">
+        <div class="relative flex h-[min(38dvh,24rem)] items-center justify-center overflow-hidden rounded-2xl bg-court-700 p-3 md:order-1 md:h-[min(72dvh,44rem)]">
+          <img id="shImg" alt="Preview of the results image" class="max-h-full max-w-full rounded-xl object-contain" style="opacity:0;transform:scale(.94);transition:opacity .3s ease,transform .3s ease" />
+          <span id="shBusy" class="absolute text-sm text-white/50" style="transition:opacity .25s ease">Making your image…</span>
+        </div>
+        <div class="flex flex-col md:order-2 md:justify-center">
+          <div class="text-xs font-bold uppercase tracking-[.22em] text-optic">Share the results</div>
+          <h3 class="mt-0.5 font-display text-2xl font-extrabold">Save as image</h3>
+          <p class="mt-1 hidden text-sm text-white/55 md:block">Top 3 players, ready to post.</p>
+          <div id="shTabs" class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-1">${Object.entries(SHARE).map(([k, f]) =>
+            `<button type="button" data-k="${k}" class="rounded-xl px-3 py-2.5 text-left transition-colors duration-300"><span class="block font-display font-bold">${f.name} <span class="num font-normal opacity-70">${f.ratio}</span></span><span class="block text-xs opacity-70">${f.note}</span></button>`).join("")}</div>
+          <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-1">
+            <button id="shSave" type="button" disabled class="rounded-xl bg-optic px-3 py-2.5 font-bold text-court-900 hover:bg-optic-dark disabled:opacity-50 md:order-1"><i class="fa-solid fa-download mr-2"></i>Download PNG</button>
+            ${canShare ? `<button id="shShare" type="button" disabled class="col-span-2 rounded-xl border border-optic/50 bg-optic/10 px-3 py-2.5 text-sm font-semibold text-optic hover:bg-optic/20 disabled:opacity-50 md:order-2 md:col-span-1"><i class="fa-solid fa-share-nodes mr-2"></i>Share to Instagram, Facebook…</button>` : ""}
+            <button id="shBack" type="button" class="rounded-xl border border-white/15 px-3 py-2.5 text-sm font-semibold hover:bg-white/10 md:order-3"><i class="fa-solid fa-arrow-left mr-2"></i>Back</button>
+          </div>
+        </div>
+      </div>`, true, "58rem");
+    $("#modalBody").style.overflowY = "hidden"; // everything fits on screen, so no scrolling
+    const img = $("#shImg"), busy = $("#shBusy");
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const paint = () => document.querySelectorAll("#shTabs button").forEach((b) => {
+      const on = b.dataset.k === key; b.setAttribute("aria-pressed", String(on));
+      b.className = "rounded-xl px-3 py-2.5 text-left transition-colors duration-300 " + (on ? "bg-optic text-court-900" : "bg-white/5 text-white hover:bg-white/10");
+    });
+    const setReady = (v) => { $("#shSave").disabled = !v; const sh = $("#shShare"); if (sh) sh.disabled = !v; };
+    const stale = (my) => my !== token || !document.body.contains(img);
+    // switching size: fade the current image out, build the new one, then fade it in
+    const make = async () => {
+      const my = ++token; paint(); setReady(false);
+      const first = !img.getAttribute("src");
+      img.style.opacity = "0"; img.style.transform = "scale(.94)";
+      busy.style.opacity = first ? "1" : "0";
+      if (!reduce && !first) await new Promise((r) => setTimeout(r, 300));
+      if (stale(my)) return;
+      const cv = await drawShare(snap, key);
+      const b = await new Promise((res) => cv.toBlob(res, "image/png"));
+      if (stale(my) || !b) return;
+      if (url) URL.revokeObjectURL(url);
+      blob = b; url = URL.createObjectURL(b); img.src = url;
+      try { await img.decode(); } catch (e) {}
+      if (stale(my)) return;
+      busy.style.opacity = "0"; img.style.opacity = "1"; img.style.transform = "scale(1)"; setReady(true);
+    };
+    document.querySelectorAll("#shTabs button").forEach((b) => (b.onclick = () => { if (b.dataset.k !== key) { key = b.dataset.k; make(); } }));
+    $("#shBack").onclick = () => { token++; if (url) URL.revokeObjectURL(url); resultsModal(snap); };
+    $("#shSave").onclick = () => {
+      if (!blob) return;
+      const a = document.createElement("a"); a.href = url; a.download = FILE(); document.body.appendChild(a); a.click(); a.remove(); toast("Image saved");
+    };
+    const sh = $("#shShare");
+    if (sh) sh.onclick = async () => { if (!blob) return; try { await navigator.share({ files: [new File([blob], FILE(), { type: "image/png" })], title: "Open play results" }); } catch (e) {} };
+    make();
   }
   function finishModal() {
     const all = Object.values(state.players);
@@ -451,10 +735,10 @@
 
   function queueRow(id, i) {
     const p = P(id);
-    return `<li data-pid="${id}" data-zone="queue" class="flex items-center gap-3 py-2">
+    return `<li data-pid="${id}" data-zone="queue" class="flex items-center gap-2 py-2 sm:gap-3">
       <span class="num w-5 shrink-0 text-center text-sm font-semibold text-white/45">${i + 1}</span>
       <div class="min-w-0 flex-1"><div class="truncate font-semibold">${esc(p.name)}</div>
-        <div class="num text-xs text-white/50">${p.wins || 0} ${(p.wins || 0) === 1 ? "win" : "wins"}, ${p.games} played, waiting <span data-since="${p.queuedAt}">${fmt(Date.now() - p.queuedAt)}</span></div></div>
+        <div class="num truncate whitespace-nowrap text-[9px] leading-tight text-white/50 min-[400px]:text-[10px] sm:text-xs">${p.wins || 0} ${(p.wins || 0) === 1 ? "win" : "wins"}, ${p.games} played, waiting <span data-since="${p.queuedAt}">${fmt(Date.now() - p.queuedAt)}</span></div></div>
       <div class="flex shrink-0 items-center gap-1.5">
         <button data-a="break" data-id="${id}" title="Take a break" aria-label="Send ${esc(p.name)} on break" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 text-white/70 transition-colors hover:border-white/40 hover:bg-white/10 hover:text-white [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10"><i class="fa-solid fa-mug-hot"></i></button>
         <button data-a="del" data-id="${id}" title="Remove player" aria-label="Remove ${esc(p.name)}" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 text-white/60 transition-colors hover:border-red-400/50 hover:bg-red-500/15 hover:text-red-300 [@media(pointer:coarse)]:h-10 [@media(pointer:coarse)]:w-10"><i class="fa-solid fa-xmark"></i></button>
@@ -613,7 +897,7 @@
     { sel: "#sec-queue > div", title: "The queue", body: "Players are called in order. The highlighted Next game block shows the next four and who plays whom. Use the cup to send someone on break (they appear under On break with a Rejoin button), or the X to remove them." },
     { sel: "#sec-log", title: "Finished games", body: "Every completed game is listed here with the winners marked by a trophy. Use Clear if you want to wipe the list without ending the session." },
     { sel: "#sec-leaderboard > div", title: "Leaderboard", body: "A live ranking of everyone who has played, updated after every game. Players are ordered by wins, and on equal wins the one with fewer games played ranks higher. A glowing dot means the player is on court right now, and the thin bar shows win rate." },
-    { sel: '[data-a="finish"]', title: "Complete Open Play", body: "When the session is over, this shows the final ranking by wins (fewer games played breaks ties) and lets you save full results as a CSV. Then the players, courts and history are cleared for the next session." },
+    { sel: '[data-a="finish"]', title: "Complete Open Play", body: "When the session is over, this shows the final ranking by wins (fewer games played breaks ties) and lets you save the results as a CSV or as an image for Instagram and Facebook (Story 9:16 or Post 1:1). Then the players, courts and history are cleared for the next session." },
     { sel: "#btnSettings", title: "Settings", body: "Change the number of courts any time, or reset the whole session. Only empty courts can be removed." },
     { title: "You're ready", body: "Add your first players to get started. You can reopen this tour any time with the Tour button at the top." },
   ];
@@ -731,6 +1015,40 @@
     if (/\n/.test(t)) { e.preventDefault(); const el = e.target; el.setRangeText(t.trim().replace(/\s*\n\s*/g, ", "), el.selectionStart, el.selectionEnd, "end"); }
   });
   $("#btnFillAll").onclick = toggleAuto;
+
+  // ---- Light / dark theme: the new theme spreads across the page from the toggle button ----
+  const THEME_KEY = "dinkhub_theme";
+  const currentTheme = () => (document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+  function paintTheme(th) {
+    document.documentElement.setAttribute("data-theme", th);
+    const light = th === "light", b = $("#btnTheme");
+    if (b) { b.setAttribute("aria-pressed", String(light)); const l = light ? "Switch to dark mode" : "Switch to light mode"; b.setAttribute("aria-label", l); b.title = l; }
+    const m = $("#metaTheme"); if (m) m.setAttribute("content", light ? "#f3f7ee" : "#0b2a24");
+    try { localStorage.setItem(THEME_KEY, th); } catch (e) {}
+  }
+  function toggleTheme() {
+    const next = currentTheme() === "light" ? "dark" : "light", root = document.documentElement, btn = $("#btnTheme");
+    const r = btn.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const radius = Math.hypot(Math.max(cx, innerWidth - cx), Math.max(cy, innerHeight - cy));
+    const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { paintTheme(next); return; }
+    root.classList.add("theme-switching");
+    const done = () => root.classList.remove("theme-switching");
+    const grow = (el, pseudo) => el.animate({ clipPath: [`circle(0px at ${cx}px ${cy}px)`, `circle(${radius}px at ${cx}px ${cy}px)`] }, { duration: 750, easing: "cubic-bezier(.4,0,.2,1)", pseudoElement: pseudo });
+    if (document.startViewTransition) {
+      const vt = document.startViewTransition(() => paintTheme(next));
+      vt.ready.then(() => grow(root, "::view-transition-new(root)")).catch(() => {});
+      vt.finished.then(done, done);
+    } else {
+      // browsers without View Transitions: a circle of the new colour spreads out, then the theme is applied
+      const cover = document.createElement("div");
+      cover.style.cssText = `position:fixed;inset:0;z-index:2147483647;pointer-events:none;background:${next === "light" ? "#f3f7ee" : "#0b2a24"}`;
+      document.body.appendChild(cover);
+      grow(cover).finished.then(() => { paintTheme(next); cover.remove(); done(); }, () => { paintTheme(next); cover.remove(); done(); });
+    }
+  }
+  paintTheme(currentTheme());
+  $("#btnTheme").onclick = toggleTheme;
   $("#btnSettings").onclick = settingsModal;
   $("#btnTour").onclick = startTour;
   $("#btnClearLog").onclick = () => { state.log = []; save(); render(); };

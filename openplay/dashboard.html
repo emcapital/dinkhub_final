@@ -5,16 +5,20 @@
         <meta name="viewport"
             content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
         <title>DinkHub | Open Play Queue</title>
-        <meta name="theme-color" content="#0b2a24" />
+        <meta id="metaTheme" name="theme-color" content="#0b2a24" />
         <link rel="icon" type="image/png" sizes="32x32"
             href="../icons/favicon-32.png" />
+        <script>
+try { var th = localStorage.getItem("dinkhub_theme") === "light" ? "light" : "dark"; document.documentElement.setAttribute("data-theme", th); } catch (e) { document.documentElement.setAttribute("data-theme", "dark"); }
+</script>
         <script src="https://cdn.tailwindcss.com"></script>
         <script>
 tailwind.config = {
   theme: { extend: {
     colors: {
-      court: { 900: "#0b2a24", 800: "#0f3a32", 700: "#14493f", 600: "#1b5e51" },
-      optic: { DEFAULT: "#d7ff3f", dark: "#b9e01f" },
+      court: { 900: "rgb(var(--c900) / <alpha-value>)", 800: "rgb(var(--c800) / <alpha-value>)", 700: "rgb(var(--c700) / <alpha-value>)", 600: "rgb(var(--c600) / <alpha-value>)" },
+      optic: { DEFAULT: "rgb(var(--optic-rgb) / <alpha-value>)", dark: "rgb(var(--optic-dk-rgb) / <alpha-value>)" },
+      white: "rgb(var(--fg) / <alpha-value>)",
     },
     fontFamily: { display: ['"Bricolage Grotesque"', "sans-serif"], body: ['"DM Sans"', "sans-serif"] },
   } },
@@ -28,8 +32,17 @@ tailwind.config = {
         <link rel="stylesheet"
             href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
         <style>
-  :root { --optic: #d7ff3f; }
-  body { background: #0b2a24; font-feature-settings: "tnum"; }
+  :root { color-scheme: dark; --c900: 11 42 36; --c800: 15 58 50; --c700: 20 73 63; --c600: 27 94 81; --optic-rgb: 215 255 63; --optic-dk-rgb: 185 224 31; --fg: 255 255 255; --optic: rgb(var(--optic-rgb)); }
+  html[data-theme="light"] { color-scheme: light; --c900: 243 247 238; --c800: 255 255 255; --c700: 232 240 227; --c600: 207 221 200; --optic-rgb: 23 96 79; --optic-dk-rgb: 17 77 63; --fg: 11 42 36; }
+  body { background: rgb(var(--c900)); font-feature-settings: "tnum"; }
+  /* no half-finished colour transitions while the theme spreads across the page */
+  html.theme-switching *, html.theme-switching *::before, html.theme-switching *::after { transition: none !important; }
+  ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+  ::view-transition-old(root) { z-index: 1; } ::view-transition-new(root) { z-index: 2; }
+  /* theme toggle icons swap with a turn */
+  #btnTheme i { position: absolute; transition: transform .5s cubic-bezier(.22, 1, .36, 1), opacity .3s; }
+  html[data-theme="dark"] #btnTheme .t-sun { transform: rotate(-90deg) scale(.3); opacity: 0; }
+  html[data-theme="light"] #btnTheme .t-moon { transform: rotate(90deg) scale(.3); opacity: 0; }
   .num { font-variant-numeric: tabular-nums; }
   @keyframes pop { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
   @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(215,255,63,.55); } 100% { box-shadow: 0 0 0 9px rgba(215,255,63,0); } }
@@ -44,23 +57,23 @@ tailwind.config = {
     width: 29%; display: flex; align-items: center; gap: 4px;
     padding: .4em .4em .4em .85em; border-radius: 999px; font-weight: 600; font-size: clamp(10.5px, 3.9cqw, 14px); line-height: 1.1;
   }
-  .slot.filled { background: #0b2a24; box-shadow: 0 2px 0 rgba(0,0,0,.35), inset 0 0 0 1px rgba(215,255,63,.35); }
+  .slot.filled { background: #0b2a24; color: #fff; box-shadow: 0 2px 0 rgba(0,0,0,.35), inset 0 0 0 1px rgba(215,255,63,.35); }
   .slot.open { border: 1.5px dashed rgba(255,255,255,.28); color: rgba(255,255,255,.4); justify-content: center; font-weight: 500; }
   .slot span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
   .slot button { flex: none; width: 22px; height: 22px; border-radius: 999px; color: rgba(255,255,255,.45); font-size: 10px; }
-  .slot button:hover, .slot button:focus-visible { background: var(--optic); color: #0b2a24; }
+  .slot button:hover, .slot button:focus-visible { background: #d7ff3f; color: #0b2a24; }
   /* bigger tap targets on touch screens */
   @media (pointer: coarse) { .row-actions button { width: 36px; height: 36px; } .slot button { width: 26px; height: 26px; } }
 
   .seg { position: relative; }
   .seg::before { content: ""; position: absolute; top: 4px; bottom: 4px; left: 4px; width: calc((100% - 8px) / 2); border-radius: 9px; background: var(--optic); transition: transform .28s cubic-bezier(.4, 0, .2, 1); }
   .seg[data-mode="stay"]::before, .seg[data-mode="fixed"]::before { transform: translateX(100%); }
-  .seg button { position: relative; flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 16px; font-weight: 600; font-size: 14px; border-radius: 9px; color: rgba(255,255,255,.65); white-space: nowrap; transition: color .28s; }
-  .seg button[aria-pressed="true"] { color: #0b2a24; }
+  .seg button { position: relative; flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 16px; font-weight: 600; font-size: 14px; border-radius: 9px; color: rgb(var(--fg) / .65); white-space: nowrap; transition: color .28s; }
+  .seg button[aria-pressed="true"] { color: rgb(var(--c900)); }
   @media (min-width: 640px) { .seg button { flex: none; width: 8rem; } }
 
-  .row-actions button { width: 28px; height: 28px; border-radius: 8px; color: rgba(255,255,255,.45); font-size: 12px; }
-  .row-actions button:hover { background: rgba(255,255,255,.1); color: #fff; }
+  .row-actions button { width: 28px; height: 28px; border-radius: 8px; color: rgb(var(--fg) / .45); font-size: 12px; }
+  .row-actions button:hover { background: rgb(var(--fg) / .1); color: rgb(var(--fg)); }
   .row-actions button.danger:hover { background: rgba(248,113,113,.15); color: #fca5a5; }
 
   /* Guided tour: only transform and opacity animate, so it stays on the GPU at 60fps */
@@ -72,8 +85,8 @@ tailwind.config = {
   .tour-ring { position: absolute; left: 0; top: 0; border: 2px solid var(--optic); border-radius: 14px; will-change: transform, opacity; contain: layout style; }
   .tour-ring::after { content: ""; position: absolute; inset: -2px; border-radius: inherit; border: 2px solid var(--optic); animation: tourPulse 1.8s ease-out infinite; }
   @keyframes tourPulse { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(1.05); opacity: 0; } }
-  .tour-card { position: absolute; left: 0; top: 0; width: min(360px, calc(100vw - 24px)); background: #0f3a32; border: 1px solid rgba(255,255,255,.14); border-radius: 16px; padding: 16px 18px 18px; box-shadow: 0 18px 50px rgba(0,0,0,.5); pointer-events: auto; will-change: transform; }
-  .tour-bar { height: 3px; border-radius: 2px; background: rgba(255,255,255,.12); overflow: hidden; margin-bottom: 14px; }
+  .tour-card { position: absolute; left: 0; top: 0; width: min(360px, calc(100vw - 24px)); background: rgb(var(--c800)); border: 1px solid rgb(var(--fg) / .14); border-radius: 16px; padding: 16px 18px 18px; box-shadow: 0 18px 50px rgba(0,0,0,.5); pointer-events: auto; will-change: transform; }
+  .tour-bar { height: 3px; border-radius: 2px; background: rgb(var(--fg) / .12); overflow: hidden; margin-bottom: 14px; }
   .tour-bar i { display: block; height: 100%; background: var(--optic); transform-origin: left; transform: scaleX(0); transition: transform .5s cubic-bezier(.22,1,.36,1); }
   .tour-inner.swap { animation: tourSwap .34s cubic-bezier(.22,1,.36,1); }
   @keyframes tourSwap { from { opacity: 0; transform: translate3d(var(--dx, 0px), 6px, 0); } to { opacity: 1; transform: none; } }
@@ -90,9 +103,14 @@ tailwind.config = {
   .rk-pulse::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid var(--optic); animation: rkPulse 2s ease-out .9s infinite; }
   @media (prefers-reduced-motion: reduce) { .rk-rise, .rk-fade, .rk-pulse::after { animation: none !important; } .rk-conf { display: none; } }
 
+  html[data-theme="light"] .text-red-300, html[data-theme="light"] .hover\:text-red-300:hover { color: #b91c1c; }
+  html[data-theme="light"] .row-actions button.danger:hover { color: #dc2626; }
+  html[data-theme="light"] .text-amber-200 { color: #92400e; }
+  html[data-theme="light"] .tour-card { box-shadow: 0 18px 50px rgba(11,42,36,.22); }
+
   :focus-visible { outline: 2px solid var(--optic); outline-offset: 2px; }
-  input::placeholder { color: rgba(255,255,255,.38); }
-  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: #1b5e51; border-radius: 8px; }
+  input::placeholder { color: rgb(var(--fg) / .38); }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-thumb { background: rgb(var(--fg) / .28); border-radius: 8px; }
   @media (prefers-reduced-motion: reduce) { .pop, .live { animation: none !important; } .seg::before, .seg button { transition: none; } }
 </style>
     </head>
@@ -133,6 +151,11 @@ tailwind.config = {
                         aria-label="Take a tour of this page"><i
                             class="fa-solid fa-circle-question"></i><span
                             class="hidden md:inline">Tour</span></button>
+                    <button id="btnTheme" type="button" aria-pressed="false"
+                        class="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white/5 hover:bg-white/10"
+                        aria-label="Switch to light mode" title="Switch to light mode"><i
+                            class="fa-solid fa-moon t-moon"></i><i
+                            class="fa-solid fa-sun t-sun"></i></button>
                     <button id="btnSettings"
                         class="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 hover:bg-white/10"
                         aria-label="Settings"><i
@@ -254,6 +277,12 @@ tailwind.config = {
             </div>
         </main>
 
+        <footer class="mx-auto max-w-[1400px] px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
+            <div class="border-t border-white/10 py-5 text-center text-sm text-white/50">
+                Developed by <span class="font-semibold text-white/85">EM Development Solutions</span>
+            </div>
+        </footer>
+
         <div id="modal"
             class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4"
             role="dialog" aria-modal="true">
@@ -262,7 +291,7 @@ tailwind.config = {
                 id="modalBody"></div>
         </div>
         <div id="toast" role="status"
-            class="pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 translate-y-10 rounded-full bg-optic px-4 py-2 text-sm font-bold text-court-900 opacity-0 transition-all"></div>
+            class="pointer-events-none fixed bottom-[max(1.25rem,env(safe-area-inset-bottom))] left-1/2 z-50 w-max max-w-[calc(100vw-1.5rem)] -translate-x-1/2 translate-y-10 rounded-full bg-optic px-4 py-2 text-center text-xs font-bold text-court-900 opacity-0 transition-all sm:text-sm"></div>
 
         <script src="dashboard.js"></script>
     </body>
